@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { generateObject } from 'ai'
 import { ollama } from '@/utils/ai/ollama'
 import { createInterviewSchema, generatedQuestionsSchema } from '@/lib/validations/interview'
+import { evaluationSchema } from '@/lib/validations/evaluation'
 
 export async function createInterviewAction(formData: FormData) {
   const supabase = await createClient()
@@ -141,15 +142,59 @@ export async function submitAnswerAction(formData: FormData): Promise<void> {
   }
 
   // 1. Insert answer record
-  const { error: answerError } = await supabase.from('answers').insert({
-    interview_id: interviewId,
-    question_id: questionId,
-    answer_text: answerText.trim(),
-  })
+  const { data: insertedAnswer, error: answerError } = await supabase
+    .from('answers')
+    .insert({
+      interview_id: interviewId,
+      question_id: questionId,
+      answer_text: answerText.trim(),
+    })
+    .select('id')
+    .single()
 
-  if (answerError) {
+  if (answerError || !insertedAnswer) {
     console.error('Answer Insert Error:', answerError)
     redirect(`/interview/${interviewId}?error=${encodeURIComponent('Failed to save answer.')}`)
+  }
+
+  // 2. Fetch question details for evaluation context
+  const { data: questionData } = await supabase
+    .from('questions')
+    .select('prompt, topic, difficulty, rubric')
+    .eq('id', questionId)
+    .single()
+
+  // 3. Generate automated AI evaluation using Ollama
+  if (questionData) {
+    try {
+      const evalResult = await generateObject({
+        model: ollama.chat('llama3.2'),
+        schema: evaluationSchema,
+        prompt: `You are an expert technical interviewer assessing a candidate's answer.
+        
+        Question Topic: ${questionData.topic}
+        Difficulty: ${questionData.difficulty}
+        Question Prompt: ${questionData.prompt}
+        Rubric / Target Expectations: ${questionData.rubric || 'Evaluate correctness, conceptual depth, trade-offs, and practical engineering judgment.'}
+        
+        Candidate's Answer:
+        """
+        ${answerText.trim()}
+        """
+        
+        Provide a fair, rigorous, and constructive evaluation according to the required schema.`,
+      })
+
+      await supabase.from('evaluations').insert({
+        answer_id: insertedAnswer.id,
+        interview_id: interviewId,
+        score: evalResult.object.score,
+        feedback: JSON.stringify(evalResult.object),
+      })
+    } catch (evalErr) {
+      console.error('Answer Evaluation Error:', evalErr)
+      // Non-blocking: interview continues even if evaluation generation experiences latency
+    }
   }
 
   // 2. Check if all questions have been answered
