@@ -133,6 +133,61 @@ Build the end-to-end interview workflow: configuration UI, local AI question gen
 - `zod` (Input and LLM schema validation)
 
 **Next Steps:**
-Proceed to Milestone 4: Automated Evaluation & Feedback Report (generating AI scoring rubrics and detailed constructive evaluations for submitted answers).
+Proceed to Milestone 4: Automated Evaluation & Feedback Report.
+
+---
+
+## Milestone 4: Automated AI Evaluation Engine & Performance Reports
+**Date:** 2026-10-12
+
+**Task Objective:**
+Implement automated, structured AI evaluation of candidate answers using Ollama (`llama3.2`) with numerical scores, performance verdicts, detailed constructive feedback, strengths, and areas for improvement, stored in PostgreSQL and rendered in a comprehensive report view.
+
+**Files Created / Modified:**
+- `src/lib/validations/evaluation.ts` (Zod schema for structured evaluation results)
+- `src/app/interview/actions.ts` (Automatic evaluation invocation on answer submission and storage in `evaluations` table)
+- `src/app/interview/[id]/page.tsx` (Completed session view with aggregate score, question breakdown, strengths, and areas to improve)
+
+**What was implemented:**
+1. **Zod Evaluation Schema**:
+   - `score` (0–100 integer), `performanceVerdict` (Exceptional, Strong Pass, Borderline, Needs Improvement).
+   - `feedback`, `strengths`, `areasForImprovement`, `idealKeyPoints`.
+2. **Automated Submission Evaluation**:
+   - Submitting an answer invokes local Ollama with GPU acceleration against the question prompt, topic, difficulty, and rubric.
+   - Evaluated data is serialized and stored in Supabase's `evaluations` table.
+3. **Comprehensive Performance Report**:
+   - Overall score card with calculated average.
+   - Question-by-question breakdown showing candidate solution, score badge, feedback, bulleted strengths, and areas to improve.
+
+---
+
+## Milestone 5: Brand Identity & High-Converting Landing Page
+**Date:** 2026-10-13
+
+**Task Objective:**
+Replace the default Next.js starter page with a production-grade, responsive, dark-mode landing page showcasing product capabilities, technical architecture, and direct entry points.
+
+**Files Created / Modified:**
+- `src/app/page.tsx` (Complete landing page with hero, live preview, bento grid, lifecycle stepper, architecture breakdown, rubric tiers, and CTA)
+- `src/app/layout.tsx` (Updated site title, meta description, and Geist font configuration)
+- `src/app/globals.css` (Smooth scrolling and Geist typography tokens)
+
+**What was implemented:**
+1. **Brand Identity & Sticky Navbar**:
+   - Logo, navigation links (Features, How It Works, Architecture, Rubric), GitHub repository link, and dynamic auth button (shows "Dashboard" if logged in, "Sign In" if guest).
+2. **Hero Section with Ambient Lighting**:
+   - Announcement badge highlighting 100% local Ollama inference, ₹0 cost, and zero data leakage.
+   - Bold typography, engaging value proposition, and dual call-to-actions.
+   - Interactive glassmorphism Terminal Simulator showing a live question, candidate solution, and instant AI rubric evaluation.
+3. **Core Capabilities Bento Grid**:
+   - Cards highlighting local GPU inference, PostgreSQL RLS, Zod schema validation, actionable feedback, topic customization, and session durability.
+4. **Transparent Engineering Showcase**:
+   - Architectural deep-dive cards explaining Next.js App Router Server Components, PostgreSQL RLS scalar subqueries, and OpenAI `/v1` compatibility.
+5. **Rubric Tiers Section**:
+   - Standardized scoring breakdown (Exceptional 85–100, Strong Pass 70–84, Borderline 55–69, Needs Improvement <55).
+
+**Next Steps:**
+Proceed to Milestone 6: Interactive Coding Sandbox (Monaco Editor integration) or real-time dialogue and conversational follow-ups.
+
 
 
