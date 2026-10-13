@@ -290,4 +290,36 @@ Build an isolated execution sandbox and real-time interactive terminal console e
    - When submitting solutions, `handleSubmit` automatically embeds the latest `stdout` test execution output so the Ollama AI evaluation engine can verify whether test cases actually passed.
 
 **Next Steps:**
-Proceed to Milestone 9: Candidate Analytics, Historical Progress Trends & Radar Chart Breakdown.
+Proceed to Milestone 9: Candidate Analytics, Historical Progress Trends & Visual Performance Dashboard.
+
+---
+
+## Milestone 9: Candidate Analytics, Historical Progress Trends & Visual Performance Dashboard
+**Date:** 2026-10-13
+
+**Task Objective:**
+Upgrade `/dashboard` into an executive candidate performance workspace with interactive analytics: real-time mean scores, completed vs in-progress session ratios, SVG score trajectory trendlines, topic mastery radar progress bars, and status/keyword search filters over interview history.
+
+**Files Created / Modified:**
+- `src/app/dashboard/DashboardAnalytics.tsx` (Client component featuring responsive KPI summary cards, custom SVG score trajectory trendline, topic mastery breakdown with color-coded gradients, and real-time session search/filtering)
+- `src/app/dashboard/page.tsx` (Server component efficiently batch-fetching user interviews, evaluations, and questions via indexed foreign key queries with PostgreSQL RLS)
+
+**What was implemented:**
+1. **Interactive Key Performance Indicators (KPIs)**:
+   - Mean Performance Score (% average across all evaluated answers).
+   - Completed Interviews tally with an animated progress bar representing completion rate.
+   - Active/In Progress tally with immediate resume links.
+   - Top-rated mastery skill badge highlighting candidate strengths.
+2. **SVG Performance Trajectory Trendline**:
+   - Zero-dependency vector charting: draws an SVG line graph with smooth gradient area fill, 70% benchmark guide, circular data points, and date labels.
+   - Plots progressive interview scores chronologically from first session to latest.
+3. **Topic Mastery Breakdown Radar**:
+   - Computes weighted average scores across topics (React, Node.js, SQL, System Design, Algorithms).
+   - Displays color-coded progress bars: Emerald ($\ge 80\%$), Indigo ($70–79\%$), and Amber ($<70\%$).
+4. **Fast Client-Side History Filtering**:
+   - Search by role, topic, or difficulty keyword.
+   - Segmented status tabs (`All`, `Completed`, `In Progress`) with instant filtering.
+   - Session cards display individual average score badges with direct deep links to `/interview/[id]`.
+
+**Next Steps:**
+Proceed to Milestone 10: Adaptive Interview Difficulty Engine or Speech/Voice Integration.

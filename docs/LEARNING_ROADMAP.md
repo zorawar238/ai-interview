@@ -26,3 +26,8 @@ This document tracks the core concepts we will learn while building this platfor
 ## Phase 6: Code Execution Sandbox & Process Isolation
 - [x] **Process Isolation:** Why we never run `eval()` on user code, stripped environment variables (`safeEnv`), and hard execution timeouts.
 - [x] **Sandboxing Architecture:** Subprocess runners (`child_process.spawn`), native Node 24 `--experimental-strip-types`, Python `-u`, and in-memory SQLite sandboxing.
+
+## Phase 7: Candidate Analytics & Data Visualization
+- [x] **Relational Batch Aggregations:** Eliminating N+1 query overhead via SQL `IN (...)` and in-memory Map lookups.
+- [x] **Vector SVG Data Visualization:** Rendering mathematical SVG trendlines and gradient fills with zero third-party bundle weight.
+- [x] **Multi-Dimensional Progress Tracking:** Calculating topic proficiency mastery and historical score trajectories.

@@ -293,5 +293,51 @@ Enterprise platforms isolate untrusted code using defense-in-depth Linux kernel 
 3. **Seccomp-BPF (Secure Computing Filters):** Restricts dangerous system calls (`syscalls`). The program is blocked from opening network sockets (`socket()`, `connect()`), spawning new processes (`fork()`, `execve()`), or accessing unauthorized file descriptors.
 4. **MicroVMs (Firecracker / gVisor):** High-scale enterprise judges run untrusted code in lightweight virtual machines that boot in milliseconds, providing hardware-level hypervisor boundary isolation.
 
+---
 
+### Q19: How do you avoid the N+1 query problem when loading relational analytics across user sessions in SQL / Supabase?
 
+#### **Short Answer (Elevator Pitch):**
+The **N+1 query problem** occurs when an application executes 1 initial query to fetch a parent list of $N$ items, followed by $N$ separate round-trip queries to fetch related child data for each individual item (resulting in $N+1$ total database round-trips). In DevInterview.ai, we eliminate this by using **batch queries with SQL `IN (...)` operators** and aggregating relations in-memory via JavaScript `Map` lookups, reducing what would be 50+ database calls down to **exactly 3 bounded, indexed queries**.
+
+#### **Anti-Pattern (N+1 Queries):**
+```typescript
+// ❌ Inefficient: 1 query for interviews + N queries for evaluations
+const interviews = await supabase.from('interviews').select('*');
+for (const interview of interviews) {
+  // Makes an individual HTTP/SQL round-trip per row!
+  const evals = await supabase.from('evaluations').select('*').eq('interview_id', interview.id);
+}
+```
+
+#### **Optimized Batch Pattern (3 Fixed Round-Trips):**
+```typescript
+// ✅ Optimized: Bounded queries regardless of interview count
+const { data: interviews } = await supabase.from('interviews').select('*');
+const interviewIds = interviews.map(i => i.id);
+
+// 1 batch query for all evaluations using the indexed foreign key
+const { data: evaluations } = await supabase
+  .from('evaluations')
+  .select('*')
+  .in('interview_id', interviewIds);
+
+// 1 batch query for all questions
+const { data: questions } = await supabase
+  .from('questions')
+  .select('*')
+  .in('interview_id', interviewIds);
+```
+
+Because `idx_evaluations_interview_id` and `idx_questions_interview_id` B-tree indexes exist, PostgreSQL resolves `WHERE interview_id IN (...)` in logarithmic $O(\log N)$ index scans rather than sequential scans.
+
+---
+
+### Q20: Why build custom accessible SVG charts instead of pulling in large external charting libraries (e.g. Chart.js, Recharts) in Next.js?
+
+#### **Short Answer:**
+Large JavaScript charting packages often introduce 150KB–400KB of client-side bundle bloat, drag in complex React-DOM reconciliation trees, and frequently trigger hydration mismatches during Server-Side Rendering (SSR). By rendering native mathematical SVG paths (`<svg viewBox="...">`, `<path d="...">`), we achieve:
+1. **Zero Bundle Overhead (0 kB added):** Pure SVG elements are native browser primitives.
+2. **Instant SSR Compatibility:** SVG paths can be pre-computed and rendered directly on the server without `window` or canvas dependencies.
+3. **Infinite Visual Scalability:** Vector graphics scale crisply across Retina screens, mobile devices, and 4K displays without pixelation.
+4. **Tailwind CSS Synergy:** SVG properties (`stroke`, `fill`, `opacity`) integrate directly with Tailwind gradients, dark-mode tokens, and CSS animations.

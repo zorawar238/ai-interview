@@ -1,7 +1,8 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { Interview } from '@/types/database'
+import { Interview, Evaluation, Question } from '@/types/database'
+import DashboardAnalytics from './DashboardAnalytics'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -14,148 +15,74 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
-  // Fetch candidate's interviews from Supabase
+  // 1. Fetch candidate's interviews from Supabase
   const { data: interviews = [], error: dbError } = await supabase
     .from('interviews')
     .select('*')
     .order('created_at', { ascending: false })
 
   const interviewList = (interviews as Interview[]) || []
-  const completedCount = interviewList.filter((i) => i.status === 'completed').length
-  const inProgressCount = interviewList.filter((i) => i.status === 'in_progress').length
+  const interviewIds = interviewList.map((i) => i.id)
+
+  // 2. Fetch all evaluations for candidate's interviews
+  let evaluations: Evaluation[] = []
+  let questions: Question[] = []
+
+  if (interviewIds.length > 0) {
+    const { data: evalData } = await supabase
+      .from('evaluations')
+      .select('*')
+      .in('interview_id', interviewIds)
+
+    if (evalData) {
+      evaluations = evalData as Evaluation[]
+    }
+
+    const { data: questionData } = await supabase
+      .from('questions')
+      .select('*')
+      .in('interview_id', interviewIds)
+
+    if (questionData) {
+      questions = questionData as Question[]
+    }
+  }
 
   return (
     <div className="min-h-screen bg-zinc-950 text-white p-6 sm:p-12">
-      <div className="max-w-5xl mx-auto space-y-10">
+      <div className="max-w-6xl mx-auto space-y-10">
         {/* Header */}
         <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-8 border-b border-zinc-800">
           <div>
-            <span className="text-xs uppercase tracking-wider text-indigo-400 font-semibold px-2.5 py-1 rounded-full bg-indigo-950/60 border border-indigo-800/60">
+            <span className="text-xs uppercase tracking-wider text-indigo-400 font-semibold px-2.5 py-1 rounded-full bg-indigo-950/60 border border-indigo-800/60 font-mono">
               Candidate Workspace
             </span>
-            <h1 className="text-3xl font-bold mt-2 text-white">Interview Dashboard</h1>
+            <h1 className="text-3xl font-bold mt-2 text-white">Interview Dashboard & Analytics</h1>
             <p className="text-zinc-400 text-sm mt-1">Logged in as {user.email}</p>
           </div>
 
           <div className="flex items-center gap-3">
             <Link
               href="/interview/new"
-              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-white shadow-lg shadow-indigo-600/20 transition-all text-sm flex items-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-white shadow-lg shadow-indigo-600/20 transition-all text-sm flex items-center gap-2 cursor-pointer"
             >
               + Start New Interview
             </Link>
             <form action="/auth/signout" method="post">
-              <button className="px-4 py-2.5 text-sm font-medium text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all">
+              <button className="px-4 py-2.5 text-sm font-medium text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-xl hover:bg-zinc-800 transition-all cursor-pointer">
                 Sign out
               </button>
             </form>
           </div>
         </header>
 
-        {/* Database Migration Warning if tables don't exist yet */}
-        {dbError && (
-          <div className="rounded-2xl bg-amber-950/40 p-6 border border-amber-800/60 text-amber-200 space-y-2">
-            <h3 className="font-semibold text-base text-amber-300 flex items-center gap-2">
-              ⚠️ Database Tables Not Found
-            </h3>
-            <p className="text-sm text-amber-200/90 leading-relaxed">
-              Your Supabase database needs the initial tables created. Please open your <strong>Supabase SQL Editor</strong> and run the migration script located at:
-            </p>
-            <code className="block bg-black/50 p-2.5 rounded-lg text-xs font-mono text-amber-300 border border-amber-800/40">
-              supabase/migrations/20261012000000_create_interview_tables.sql
-            </code>
-          </div>
-        )}
-
-        {/* Aggregate Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5">
-            <span className="text-xs text-zinc-400 uppercase font-semibold">Total Sessions</span>
-            <p className="text-3xl font-bold text-white mt-2">{interviewList.length}</p>
-          </div>
-          <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5">
-            <span className="text-xs text-indigo-400 uppercase font-semibold">In Progress</span>
-            <p className="text-3xl font-bold text-indigo-400 mt-2">{inProgressCount}</p>
-          </div>
-          <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5">
-            <span className="text-xs text-emerald-400 uppercase font-semibold">Completed</span>
-            <p className="text-3xl font-bold text-emerald-400 mt-2">{completedCount}</p>
-          </div>
-        </div>
-
-        {/* Interview Sessions History */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-white">Your Interview Sessions</h2>
-            <span className="text-xs text-zinc-500 font-mono">
-              Protected by PostgreSQL RLS
-            </span>
-          </div>
-
-          {interviewList.length === 0 ? (
-            <div className="text-center py-16 bg-zinc-900/30 border border-zinc-800/60 rounded-2xl space-y-4">
-              <div className="text-4xl">🎯</div>
-              <h3 className="text-lg font-semibold text-zinc-200">No interview sessions yet</h3>
-              <p className="text-sm text-zinc-400 max-w-md mx-auto">
-                Ready to practice? Launch a new session to get customized technical questions generated by your local Ollama AI model.
-              </p>
-              <Link
-                href="/interview/new"
-                className="inline-block mt-2 px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-white shadow-md transition-all text-sm"
-              >
-                Launch First Interview
-              </Link>
-            </div>
-          ) : (
-            <div className="divide-y divide-zinc-800/80 bg-zinc-900/40 border border-zinc-800/80 rounded-2xl overflow-hidden">
-              {interviewList.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-5 sm:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 hover:bg-zinc-800/20 transition-colors"
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="font-semibold text-white text-base">{item.role}</span>
-                      <span className="text-xs px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700/60 capitalize">
-                        {item.experience_level}
-                      </span>
-                      <span className="text-xs px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 border border-zinc-700/60 capitalize">
-                        {item.difficulty}
-                      </span>
-                      <span
-                        className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${
-                          item.status === 'completed'
-                            ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
-                            : item.status === 'in_progress'
-                            ? 'bg-indigo-950/60 text-indigo-400 border border-indigo-800/60'
-                            : 'bg-zinc-800 text-zinc-400'
-                        }`}
-                      >
-                        {item.status === 'in_progress' ? 'In Progress' : item.status}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-zinc-400">
-                      Topics: {item.topics?.join(', ') || 'General'} • Created:{' '}
-                      {new Date(item.created_at).toLocaleDateString()}
-                    </p>
-                  </div>
-
-                  <Link
-                    href={`/interview/${item.id}`}
-                    className={`px-4 py-2 text-xs font-semibold rounded-xl transition-all ${
-                      item.status === 'completed'
-                        ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60'
-                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm'
-                    }`}
-                  >
-                    {item.status === 'completed' ? 'Review Summary →' : 'Continue Session →'}
-                  </Link>
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
+        {/* Analytics & History Component */}
+        <DashboardAnalytics
+          interviews={interviewList}
+          evaluations={evaluations}
+          questions={questions}
+          dbError={Boolean(dbError)}
+        />
       </div>
     </div>
   )
