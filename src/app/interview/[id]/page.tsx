@@ -286,6 +286,7 @@ export default async function InterviewSessionPage(props: {
             prompt={currentQuestion.prompt}
             hints={hints}
             durationMinutes={interview.duration_minutes || 30}
+            role={interview.role}
           />
         )}
       </div>

@@ -18,9 +18,10 @@ This document tracks the core concepts we will learn while building this platfor
 - [x] **Structured Outputs:** Forcing an LLM to return valid JSON (critical for application state).
 - [x] **Local LLMs:** Understanding how models run via Ollama and handling latency/streaming.
 
-## Phase 5: State Management & UI
+## Phase 5: State Management, Live Streaming & UI
 - [x] **React State:** Managing the interview flow (Monaco editor, live countdown timer, progressive hints).
 - [x] **Asynchronous Programming:** Handling promises and useTransition when waiting for AI responses.
+- [x] **Real-Time Streaming Dialogue:** HTTP Chunked transfer (`ReadableStream`, `TextDecoder`) vs WebSockets, Socratic interviewer system prompts.
 
 ## Phase 6: Code Execution Sandbox (Future)
 - [ ] **Process Isolation:** Why we never run `eval()` on user code.

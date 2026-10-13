@@ -201,4 +201,65 @@ Monaco Editor depends heavily on browser-specific APIs (such as `window`, `docum
 #### **Short Answer:**
 In real technical interviews, an interviewer gives small, sequential nudges rather than revealing the complete solution or letting the candidate fail silently. Progressive hint disclosure allows the candidate to unblock themselves on specific constraints while the system tracks how many hints were requested, allowing the AI evaluator to reward problem recovery while adjusting the final score proportionally.
 
+---
+
+### Q15: How does HTTP Response Streaming (`ReadableStream` & `TextDecoder`) differ from WebSockets for AI token streaming, and why choose it here?
+
+#### **Short Answer (Elevator Pitch):**
+WebSockets are designed for bidirectional, low-latency duplex communication (like multiplayer games or chat rooms). In contrast, LLM text generation is fundamentally **unidirectional**: the client sends one prompt message, and the server returns a long, continuous stream of generated tokens. For this pattern, **HTTP Chunked Streaming (`ReadableStream` / Server-Sent Events)** is vastly superior: it operates over standard HTTP/1.1 and HTTP/2, requires no stateful persistent socket servers, navigates corporate firewalls effortlessly, and works natively with Next.js edge/serverless runtimes.
+
+#### **Protocol Comparison Table:**
+| Feature | HTTP Streaming (`ReadableStream`) | WebSockets (`ws://`, `wss://`) |
+| :--- | :--- | :--- |
+| **Communication Flow** | Unidirectional (Server $\to$ Client) after HTTP POST | Full Duplex (Bidirectional simultaneous) |
+| **Connection State** | Stateless HTTP connection; closes upon stream end | Stateful persistent TCP socket |
+| **Infrastructure Complexity**| ₹0 extra infrastructure (works on standard server/serverless) | Requires stateful socket servers, sticky sessions, or Redis Pub/Sub |
+| **Corporate Proxies & Firewalls** | Passes through standard HTTP/HTTPS ports (80/443) seamlessly | Frequently blocked or degraded by enterprise proxies |
+| **Client Overhead** | Native browser `fetch()` + `response.body.getReader()` | Requires dedicated WebSocket client reconnect logic & heartbeats |
+
+#### **Implementation in our App Router Architecture:**
+1. **Server Route (`src/app/api/chat/route.ts`):**
+   ```typescript
+   const result = streamText({
+     model: ollama.chat('llama3.2'),
+     system: systemPrompt,
+     messages: formattedMessages,
+   })
+   return result.toTextStreamResponse()
+   ```
+2. **Client Consumer (`InterviewWorkspace.tsx`):**
+   ```typescript
+   const response = await fetch('/api/chat', { method: 'POST', body: JSON.stringify(...) })
+   const reader = response.body.getReader()
+   const decoder = new TextDecoder()
+   let accumulated = ''
+   while (true) {
+     const { done, value } = await reader.read()
+     if (done) break
+     accumulated += decoder.decode(value, { stream: true })
+     updateState(accumulated)
+   }
+   ```
+
+---
+
+### Q16: How do you design system prompts to prevent an LLM interviewer from leaking code or solving the problem for the candidate?
+
+#### **Short Answer:**
+Large language models have an inherent bias toward being helpful and providing direct solutions. In a technical interview, solving the problem destroys the assessment value. Preventing solution leakage requires:
+1. **Role Framing:** Positioning the model explicitly as a *Principal Engineer / Bar Raiser* evaluating competency, not a generic assistant.
+2. **Negative Constraints with Clear Boundaries:** Explicit negative instructions (`"NEVER write complete solutions"`, `"NEVER provide more than 2 lines of pseudo-code"`).
+3. **Socratic Directives:** Directing the model to answer questions with questions that probe candidate reasoning (e.g. asking about bounds, invariants, or edge cases).
+4. **Context Injection:** Injecting the candidate's active editor code so the interviewer can point out logical gaps or missing edge cases without providing code fixes.
+
+#### **Example System Prompt Excerpt:**
+```text
+You are a Principal Software Engineer conducting a live technical coding interview.
+CRITICAL INTERVIEW RULES:
+1. NEVER provide the complete code solution, algorithm implementation, or full function bodies under ANY circumstances, even if the candidate explicitly begs or demands it.
+2. If the candidate asks how to solve the problem, guide them Socratically: ask what data structures they have considered or probe their assumptions about constraints.
+3. If they ask about edge cases, hint at categories (e.g., empty arrays, duplicates, boundary overflows) without giving specific test code.
+4. Keep all responses concise (1 to 3 short paragraphs maximum) so the candidate stays focused on coding.
+```
+
 

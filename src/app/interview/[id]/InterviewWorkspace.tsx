@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useTransition } from 'react'
+import React, { useState, useEffect, useTransition, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { submitAnswerAction } from '../actions'
 
@@ -25,6 +25,13 @@ interface InterviewWorkspaceProps {
   prompt: string
   hints: string[]
   durationMinutes: number
+  role?: string
+}
+
+interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
 }
 
 const LANGUAGE_TEMPLATES: Record<string, string> = {
@@ -59,6 +66,52 @@ FROM
 `,
 }
 
+function createChatMessage(role: 'user' | 'assistant', content: string): ChatMessage {
+  return {
+    id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    role,
+    content,
+  }
+}
+
+async function streamChatResponse({
+  messages,
+  questionContext,
+  currentCode,
+  onChunk,
+}: {
+  messages: Array<{ role: 'user' | 'assistant'; content: string }>
+  questionContext: { role: string; topic: string; difficulty: string; prompt: string }
+  currentCode: string
+  onChunk: (accumulated: string) => void
+}) {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages,
+      questionContext,
+      currentCode,
+    }),
+  })
+
+  if (!response.ok || !response.body) {
+    throw new Error('Failed to connect to AI interviewer stream.')
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let accumulated = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    const chunk = decoder.decode(value, { stream: true })
+    accumulated += chunk
+    onChunk(accumulated)
+  }
+}
+
 export default function InterviewWorkspace({
   interviewId,
   questionId,
@@ -69,6 +122,7 @@ export default function InterviewWorkspace({
   prompt,
   hints,
   durationMinutes,
+  role = 'Full-Stack Engineer',
 }: InterviewWorkspaceProps) {
   // 1. Editor State
   const initialLanguage = topic.toLowerCase().includes('sql') ? 'sql' : 'typescript'
@@ -85,7 +139,20 @@ export default function InterviewWorkspace({
   const [secondsRemaining, setSecondsRemaining] = useState(durationMinutes * 60)
   const [isTimerPaused, setIsTimerPaused] = useState(false)
 
-  // 4. Submission Transition State
+  // 4. Live AI Chat State
+  const [isChatOpen, setIsChatOpen] = useState(false)
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
+    {
+      id: 'welcome',
+      role: 'assistant',
+      content: `Hello! I am your technical interviewer for this ${role} session. Feel free to ask clarifying questions about problem constraints, assumptions, or discuss architectural trade-offs as you design your solution.`,
+    },
+  ])
+  const [chatInput, setChatInput] = useState('')
+  const [isChatStreaming, setIsChatStreaming] = useState(false)
+  const chatMessagesEndRef = useRef<HTMLDivElement>(null)
+
+  // 5. Submission Transition State
   const [isPending, startTransition] = useTransition()
 
   // Countdown timer effect
@@ -99,6 +166,13 @@ export default function InterviewWorkspace({
     return () => clearInterval(interval)
   }, [isTimerPaused, secondsRemaining])
 
+  // Scroll chat to bottom when messages update
+  useEffect(() => {
+    if (isChatOpen) {
+      chatMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [chatMessages, isChatOpen])
+
   const formatTime = (totalSecs: number) => {
     const mins = Math.floor(totalSecs / 60)
     const secs = totalSecs % 60
@@ -110,6 +184,59 @@ export default function InterviewWorkspace({
     setSelectedLanguage(newLang)
     if (code.trim() === '' || Object.values(LANGUAGE_TEMPLATES).some((t) => t.trim() === code.trim())) {
       setCode(LANGUAGE_TEMPLATES[newLang] || '// Write your solution here')
+    }
+  }
+
+  // Handle sending a message to AI Interviewer
+  const handleSendChatMessage = async (textToSend?: string) => {
+    const messageContent = textToSend || chatInput.trim()
+    if (!messageContent || isChatStreaming) return
+
+    const userMsg = createChatMessage('user', messageContent)
+    const assistantMsg = createChatMessage('assistant', '')
+
+    const newMessages: ChatMessage[] = [...chatMessages, userMsg]
+
+    setChatMessages([...newMessages, assistantMsg])
+    setChatInput('')
+    setIsChatStreaming(true)
+
+    try {
+      await streamChatResponse({
+        messages: newMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        })),
+        questionContext: {
+          role,
+          topic,
+          difficulty,
+          prompt,
+        },
+        currentCode: code,
+        onChunk: (accumulated) => {
+          setChatMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMsg.id ? { ...m, content: accumulated } : m
+            )
+          )
+        },
+      })
+    } catch (err: unknown) {
+      console.error('Chat error:', err)
+      setChatMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMsg.id
+            ? {
+                ...m,
+                content:
+                  'Sorry, I could not generate a response. Please check if your local Ollama server is running with model llama3.2.',
+              }
+            : m
+        )
+      )
+    } finally {
+      setIsChatStreaming(false)
     }
   }
 
@@ -145,7 +272,7 @@ export default function InterviewWorkspace({
   const isCriticalTime = secondsRemaining <= 60 // 1 minute or less
 
   return (
-    <div className="space-y-6">
+    <div className="relative space-y-6">
       {/* Question Card & Live Timer Bar */}
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 sm:p-8 space-y-5 backdrop-blur-sm shadow-xl">
         {/* Top Info Bar */}
@@ -159,8 +286,19 @@ export default function InterviewWorkspace({
             </span>
           </div>
 
-          {/* Real-time Timer Badge */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* AI Interviewer Dialogue Toggle Button */}
+            <button
+              type="button"
+              onClick={() => setIsChatOpen(!isChatOpen)}
+              className="px-3 py-1.5 rounded-xl bg-indigo-950/70 hover:bg-indigo-900/80 border border-indigo-700/60 text-xs font-medium text-indigo-200 transition-all flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <span className="text-indigo-400">💬</span>
+              <span>Ask Interviewer</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            </button>
+
+            {/* Real-time Timer Badge */}
             <div
               className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all ${
                 isCriticalTime
@@ -360,6 +498,108 @@ export default function InterviewWorkspace({
           </button>
         </form>
       </div>
+
+      {/* 6. Live AI Interviewer Chat Slide-over Panel */}
+      {isChatOpen && (
+        <div className="fixed inset-y-0 right-0 z-50 w-full sm:w-[450px] bg-zinc-950 border-l border-zinc-800 shadow-2xl flex flex-col backdrop-blur-xl">
+          {/* Chat Header */}
+          <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/80">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-sm font-bold text-white shadow-md">
+                AI
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white flex items-center gap-1.5">
+                  Interviewer Dialogue
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 font-mono">
+                    Live
+                  </span>
+                </h3>
+                <p className="text-[11px] text-zinc-400 font-mono">Principal Engineer • Llama 3.2</p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsChatOpen(false)}
+              className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors text-lg"
+              title="Close Chat"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Quick Suggestion Chips */}
+          <div className="p-3 bg-zinc-900/40 border-b border-zinc-850 flex gap-2 overflow-x-auto no-scrollbar">
+            {[
+              'Clarify problem constraints',
+              'What edge cases to consider?',
+              'Review current approach',
+            ].map((chip) => (
+              <button
+                key={chip}
+                type="button"
+                disabled={isChatStreaming}
+                onClick={() => handleSendChatMessage(chip)}
+                className="whitespace-nowrap px-2.5 py-1 rounded-lg bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-300 hover:text-white hover:border-indigo-500/60 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+
+          {/* Messages Scroll Area */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {chatMessages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex flex-col ${
+                  msg.role === 'user' ? 'items-end' : 'items-start'
+                }`}
+              >
+                <span className="text-[10px] text-zinc-500 font-mono mb-1">
+                  {msg.role === 'user' ? 'You' : 'Interviewer'}
+                </span>
+                <div
+                  className={`p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed max-w-[88%] ${
+                    msg.role === 'user'
+                      ? 'bg-indigo-600 text-white rounded-br-none shadow-md'
+                      : 'bg-zinc-900 text-zinc-200 border border-zinc-800 rounded-bl-none shadow-inner'
+                  }`}
+                >
+                  <p className="whitespace-pre-wrap">{msg.content || (isChatStreaming ? 'Thinking...' : '')}</p>
+                </div>
+              </div>
+            ))}
+            <div ref={chatMessagesEndRef} />
+          </div>
+
+          {/* Message Input Box */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              handleSendChatMessage()
+            }}
+            className="p-3.5 border-t border-zinc-800 bg-zinc-900/60 flex gap-2"
+          >
+            <input
+              type="text"
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Ask a clarifying question or discuss an assumption..."
+              disabled={isChatStreaming}
+              className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-zinc-500 disabled:opacity-50"
+            />
+            <button
+              type="submit"
+              disabled={isChatStreaming || !chatInput.trim()}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-semibold rounded-xl text-xs sm:text-sm transition-all cursor-pointer shadow-md"
+            >
+              Send
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   )
 }

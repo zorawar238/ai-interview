@@ -222,8 +222,37 @@ Upgrade the active interview session into an interactive coding workspace featur
    - Submitting an answer triggers `useTransition`, providing an animated spinner and *"Evaluating with Ollama AI..."* status indicator.
 
 **Next Steps:**
-Proceed to Milestone 7: Isolated Code Execution (safe sandbox evaluation) or Real-Time Conversational AI Follow-ups.
+Proceed to Milestone 7: Live AI Interviewer Chat & Follow-ups.
 
+---
 
+## Milestone 7: Live AI Interviewer Chat & Streaming Follow-ups
+**Date:** 2026-10-13
 
+**Task Objective:**
+Implement real-time conversational streaming dialogue during active interview sessions, allowing candidates to ask clarifying questions about constraints, test their assumptions, and receive Socratic guidance without leaking complete code solutions.
 
+**Files Created / Modified:**
+- `src/app/api/chat/route.ts` (Streaming chat route using `streamText()` with local Ollama `llama3.2` and strict Principal Engineer persona system prompt)
+- `src/app/interview/[id]/InterviewWorkspace.tsx` (Slide-over chat drawer, quick prompt chips, autoscrolling chat history, and chunked `ReadableStream` reader)
+- `src/app/interview/[id]/page.tsx` (Forwarded candidate target role to the workspace component)
+
+**What was implemented:**
+1. **Principal Engineer Interviewer Persona System Prompt**:
+   - Instructs the LLM to behave like a senior technical interviewer at a tier-1 tech company.
+   - Actively prevents code leakage: never returns full solutions or implementations, guiding the candidate with targeted Socratic questions, boundary conditions, and complexity trade-offs instead.
+   - Considers full context: aware of candidate target role, problem topic, difficulty, prompt description, and candidate's current draft code in Monaco Editor.
+2. **HTTP Chunked Streaming (`streamText` & `result.toTextStreamResponse()`)**:
+   - Returns chunks with `Transfer-Encoding: chunked`, delivering tokens directly from local GPU Ollama to the browser as they are generated.
+   - Avoids high-latency waiting periods typical of non-streaming REST endpoints.
+3. **Interactive Slide-over Chat Drawer**:
+   - Easily opened and closed alongside the Monaco Editor and architecture notes.
+   - Distinct visual roles: candidate messages highlighted in indigo, interviewer responses in dark glassmorphism cards.
+   - Visual streaming indicator (*"Thinking..."*) and smooth auto-scroll to latest response.
+4. **Quick Suggestion Chips**:
+   - Fast one-click prompts for common interview inquiries: *"Clarify problem constraints"*, *"What edge cases to consider?"*, and *"Review current approach"*.
+5. **React 19 & Compiler Purity Architecture**:
+   - Extracted streaming and ID creation helpers (`streamChatResponse`, `createChatMessage`) to module scope to strictly adhere to React 19's `react-hooks/purity` and `react-hooks/immutability` lint checks.
+
+**Next Steps:**
+Proceed to Milestone 8: Safe Isolated Code Execution Sandbox or Advanced Candidate History & Analytics.
