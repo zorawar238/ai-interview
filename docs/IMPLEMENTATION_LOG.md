@@ -255,4 +255,39 @@ Implement real-time conversational streaming dialogue during active interview se
    - Extracted streaming and ID creation helpers (`streamChatResponse`, `createChatMessage`) to module scope to strictly adhere to React 19's `react-hooks/purity` and `react-hooks/immutability` lint checks.
 
 **Next Steps:**
-Proceed to Milestone 8: Safe Isolated Code Execution Sandbox or Advanced Candidate History & Analytics.
+Proceed to Milestone 8: Safe Isolated Code Execution Sandbox.
+
+---
+
+## Milestone 8: Safe Isolated Code Execution Sandbox & Interactive Terminal
+**Date:** 2026-10-13
+
+**Task Objective:**
+Build an isolated execution sandbox and real-time interactive terminal console enabling candidates to test, debug, and execute their TypeScript, JavaScript, Python, and SQL solutions with strict CPU, memory, and timeout limits before final submission.
+
+**Files Created / Modified:**
+- `src/lib/validations/execution.ts` (Zod schemas for code execution requests, input limits, and structured results)
+- `src/app/api/execute/route.ts` (Isolated process runner route with sanitized environment, 5000ms hard kill timeout, and 64KB buffer caps)
+- `src/app/interview/[id]/InterviewWorkspace.tsx` (Integrated "▶ Run Code" action button, Execution Console panel with Terminal Output, Stdin tab, execution status badges, and submission payload enrichment)
+
+**What was implemented:**
+1. **Isolated Multi-Language Process Runner (`/api/execute`)**:
+   - Zero-dependency local execution: executes without paying third-party SaaS fees or hitting rate limits.
+   - **TypeScript & JavaScript**: Executes natively via Node 24's `--experimental-strip-types` without heavyweight build steps.
+   - **Python**: Executes via `python -u` in unbuffered mode.
+   - **SQL**: Executes queries in an in-memory SQLite sandbox with a pre-populated `employees` schema, rendering tabular ASCII results or syntax errors.
+2. **Defensive Trust Boundaries & Security Enforcements**:
+   - **Process Isolation**: Never runs `eval()` or runs inside the main Next.js web application process.
+   - **Sanitized Environment**: Completely strips `process.env` secrets (e.g. Supabase keys, Ollama credentials, API tokens) so candidate code cannot inspect secrets.
+   - **Hard Execution Timeout**: 5000ms kill limit using `child.kill('SIGKILL')` and Windows `taskkill` to terminate infinite loops.
+   - **Output Buffer Cap**: Caps `stdout` and `stderr` at 64KB to prevent buffer overflow attacks.
+   - **Authentication Gating**: Only authenticated users can trigger code execution.
+3. **Interactive Terminal Console UI**:
+   - Sub-tabs for **Terminal Output** and **Custom Input (stdin)**.
+   - Status indicators displaying `Exit 0 (Success)`, `Exit Code (Error)`, or `Timed Out` alongside execution time in milliseconds (`ms`).
+   - Terminal placeholder instructions and one-click clear button.
+4. **Enhanced Submission Evaluation**:
+   - When submitting solutions, `handleSubmit` automatically embeds the latest `stdout` test execution output so the Ollama AI evaluation engine can verify whether test cases actually passed.
+
+**Next Steps:**
+Proceed to Milestone 9: Candidate Analytics, Historical Progress Trends & Radar Chart Breakdown.

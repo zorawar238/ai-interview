@@ -23,6 +23,6 @@ This document tracks the core concepts we will learn while building this platfor
 - [x] **Asynchronous Programming:** Handling promises and useTransition when waiting for AI responses.
 - [x] **Real-Time Streaming Dialogue:** HTTP Chunked transfer (`ReadableStream`, `TextDecoder`) vs WebSockets, Socratic interviewer system prompts.
 
-## Phase 6: Code Execution Sandbox (Future)
-- [ ] **Process Isolation:** Why we never run `eval()` on user code.
-- [ ] **Sandboxing:** How services like Piston use Docker/containers to isolate execution.
+## Phase 6: Code Execution Sandbox & Process Isolation
+- [x] **Process Isolation:** Why we never run `eval()` on user code, stripped environment variables (`safeEnv`), and hard execution timeouts.
+- [x] **Sandboxing Architecture:** Subprocess runners (`child_process.spawn`), native Node 24 `--experimental-strip-types`, Python `-u`, and in-memory SQLite sandboxing.

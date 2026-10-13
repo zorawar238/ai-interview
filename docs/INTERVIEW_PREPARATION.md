@@ -262,4 +262,36 @@ CRITICAL INTERVIEW RULES:
 4. Keep all responses concise (1 to 3 short paragraphs maximum) so the candidate stays focused on coding.
 ```
 
+---
+
+### Q17: Why is running user-submitted code via `eval()` in a web server catastrophic, and how is safe process isolation implemented?
+
+#### **Short Answer (Elevator Pitch):**
+Using JavaScript `eval()` or `new Function()` executes untrusted code directly inside the host Node.js runtime with the server's full privileges. An attacker can execute Remote Code Execution (RCE), steal database credentials (`process.env`), crash the entire server (`process.exit(1)`), or initiate a Denial-of-Service fork bomb. Untrusted code must **never** run in the main application process; it must be isolated in a separate subprocess with stripped environment variables, strict execution timeouts, and capped output buffers.
+
+#### **Threat Vectors of In-Process Execution:**
+1. **Credential Theft:** `console.log(process.env.SUPABASE_SERVICE_ROLE_KEY)` leaks production secrets.
+2. **Server Crashing:** `process.exit(0)` terminates the Next.js production server for all users.
+3. **Infinite Loops & CPU Starvation:** `while(true) {}` blocks Node's single-threaded event loop, freezing all incoming HTTP requests.
+4. **Buffer Overflow Attacks:** `while(true) console.log('A')` exhausts memory and triggers out-of-memory (OOM) crashes.
+
+#### **How DevInterview.ai Implements Defense-in-Depth:**
+* **Process Boundary:** Code executes in a spawned child process (`node --experimental-strip-types` or `python -u`), completely decoupled from the Next.js server thread.
+* **Stripped Environment (`safeEnv`):** Application secrets and Supabase keys are completely omitted from the spawned process environment; the runner only receives basic system path variables (`PATH`, `TEMP`).
+* **Hard 5000ms Timeout:** If execution exceeds 5 seconds, the process is terminated immediately with `SIGKILL` / `taskkill`, neutralizing infinite loops.
+* **Capped Output Buffers:** Standard output and error streams are truncated at 64 KB, preventing memory flooding.
+* **Ephemeral Workspaces:** Each run executes inside a temporary directory created via `fs.mkdtemp` and cleaned up atomically in a `finally` block.
+
+---
+
+### Q18: How do large-scale competitive programming platforms (LeetCode, HackerRank) achieve multi-tenant code isolation?
+
+#### **Short Answer:**
+Enterprise platforms isolate untrusted code using defense-in-depth Linux kernel primitives:
+1. **Linux cgroups v2 (Control Groups):** Enforces strict per-process hardware quotas (e.g. max 256 MB RAM, max 1 CPU core). If a program exceeds memory, the kernel triggers an immediate `OOM Killer` without affecting other containers.
+2. **Linux Namespaces:** Virtualizes system resources so candidate code runs in an isolated network namespace (`CLONE_NEWNET` with no internet access), mount namespace (isolated read-only root filesystem), and PID namespace (cannot inspect other processes).
+3. **Seccomp-BPF (Secure Computing Filters):** Restricts dangerous system calls (`syscalls`). The program is blocked from opening network sockets (`socket()`, `connect()`), spawning new processes (`fork()`, `execve()`), or accessing unauthorized file descriptors.
+4. **MicroVMs (Firecracker / gVisor):** High-scale enterprise judges run untrusted code in lightweight virtual machines that boot in milliseconds, providing hardware-level hypervisor boundary isolation.
+
+
 

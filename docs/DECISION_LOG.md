@@ -83,3 +83,26 @@ Record every significant engineering decision here.
 **Consequences:** Flawless coding experience during interviews with zero SSR hydration errors.
 **Conditions that would justify revisiting:** If client memory usage on low-end mobile devices becomes a limiting factor.
 **Related files and tests:** `src/app/interview/[id]/InterviewWorkspace.tsx`, `src/app/interview/[id]/page.tsx`.
+
+---
+
+**Decision ID:** 006
+**Date:** 2026-10-13
+**Status:** Accepted
+
+**Problem:** How do we safely execute untrusted candidate code (TypeScript, JavaScript, Python, SQL) in real-time with ₹0 API cost, zero third-party rate limits, and full defense against server compromise?
+**Context:** The PRD (FR-08) requires safe isolated code execution without executing untrusted code inside the main Node.js web server. Public cloud runners like Piston have transitioned to whitelist-only access as of 2026, and Judge0 requires paid RapidAPI keys.
+**Options considered:**
+1. Running untrusted code using `eval()` or `vm` inside the Next.js process (Rejected: Catastrophic security vulnerability allowing RCE, `process.exit()`, and credential theft).
+2. Requiring user-provided cloud sandbox API keys (Judge0 / Piston) (Rejected: Violates the ₹0 setup and local privacy target).
+3. Local multi-language subprocess runner with strict environment sanitization, ephemeral directories, 5000ms hard timeouts, and capped output buffers.
+**Chosen decision:** **Local multi-language subprocess runner (`/api/execute`) with sanitized environment (`safeEnv`), hard execution timeouts (5000ms), and ephemeral directory cleanup.**
+**Reasoning and evidence:** 
+- Node 24 natively executes TypeScript without external dependencies via `--experimental-strip-types`.
+- Python 3.14 runs Python scripts directly and executes SQL queries inside in-memory SQLite sandboxes with sample interview datasets.
+- Process separation prevents candidate code from touching the Next.js event loop.
+- Sanitizing the child process `env` completely strips Supabase credentials, Ollama configurations, and database secrets.
+- Hard 5000ms timeouts kill runaway loops (`while(true) {}`), and 64 KB output buffer caps prevent memory flooding.
+**Tradeoffs:** In a multi-tenant cloud SaaS deployment, container-level isolation (Docker / gVisor / Firecracker) would be layered over this runner. For local-first developer environments, this provides 100% offline functionality with ₹0 cost and zero quota exhaustion.
+**Consequences:** Instant execution feedback for candidates across TypeScript, JavaScript, Python, and SQL with guaranteed timeout protection and zero secret leakage.
+**Related files and tests:** `src/lib/validations/execution.ts`, `src/app/api/execute/route.ts`, `src/app/interview/[id]/InterviewWorkspace.tsx`, `docs/SECURITY.md`.

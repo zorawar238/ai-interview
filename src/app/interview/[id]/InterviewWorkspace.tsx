@@ -34,36 +34,98 @@ interface ChatMessage {
   content: string
 }
 
+interface ExecutionResult {
+  status: 'success' | 'error' | 'timeout'
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  executionTimeMs: number
+}
+
 const LANGUAGE_TEMPLATES: Record<string, string> = {
   typescript: `// TypeScript Solution
-// Write your types, implementation, and edge-case handling:
+// Write your types, implementation, and test runner:
 
-function solution() {
-  // TODO: Implement solution
+function solution(nums: number[], target: number): number[] {
+  const map = new Map<number, number>();
+  for (let i = 0; i < nums.length; i++) {
+    const diff = target - nums[i];
+    if (map.has(diff)) {
+      return [map.get(diff)!, i];
+    }
+    map.set(nums[i], i);
+  }
+  return [];
 }
+
+// Test Run:
+console.log("Two Sum [2, 7, 11, 15] target 9 ->", solution([2, 7, 11, 15], 9));
 `,
   javascript: `// JavaScript Solution
-// Write your implementation and edge-case handling:
+// Write your implementation and test runner:
 
-function solution() {
-  // TODO: Implement solution
+function solution(nums, target) {
+  const map = new Map();
+  for (let i = 0; i < nums.length; i++) {
+    const diff = target - nums[i];
+    if (map.has(diff)) {
+      return [map.get(diff), i];
+    }
+    map.set(nums[i], i);
+  }
+  return [];
 }
+
+// Test Run:
+console.log("Two Sum [2, 7, 11, 15] target 9 ->", solution([2, 7, 11, 15], 9));
 `,
   python: `# Python Solution
-# Write your implementation and edge-case handling:
+# Write your implementation and test runner:
 
-def solution():
-    # TODO: Implement solution
-    pass
+def solution(nums: list[int], target: int) -> list[int]:
+    lookup = {}
+    for i, num in enumerate(nums):
+        diff = target - num
+        if diff in lookup:
+            return [lookup[diff], i]
+        lookup[num] = i
+    return []
+
+# Test Run:
+print("Two Sum [2, 7, 11, 15] target 9 ->", solution([2, 7, 11, 15], 9))
 `,
-  sql: `-- PostgreSQL Query / Schema Design
--- Write your SQL query or table constraints below:
+  sql: `-- PostgreSQL / SQLite Query
+-- Note: 'employees' table is pre-loaded:
+-- columns: (id INTEGER, name TEXT, department TEXT, salary INTEGER)
 
 SELECT 
-    * 
+    department, 
+    COUNT(*) AS total_employees, 
+    AVG(salary) AS avg_salary
 FROM 
-    your_table;
+    employees
+GROUP BY 
+    department
+ORDER BY 
+    avg_salary DESC;
 `,
+}
+
+async function executeCodeSandbox(payload: {
+  language: string
+  code: string
+  stdin?: string
+}): Promise<ExecutionResult> {
+  const res = await fetch('/api/execute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  if (!res.ok) {
+    const errorJson = await res.json().catch(() => ({}))
+    throw new Error(errorJson.stderr || errorJson.error || 'Execution request failed')
+  }
+  return res.json()
 }
 
 function createChatMessage(role: 'user' | 'assistant', content: string): ChatMessage {
@@ -152,7 +214,14 @@ export default function InterviewWorkspace({
   const [isChatStreaming, setIsChatStreaming] = useState(false)
   const chatMessagesEndRef = useRef<HTMLDivElement>(null)
 
-  // 5. Submission Transition State
+  // 5. Code Execution State
+  const [isRunningCode, setIsRunningCode] = useState(false)
+  const [executionResult, setExecutionResult] = useState<ExecutionResult | null>(null)
+  const [customStdin, setCustomStdin] = useState('')
+  const [consoleTab, setConsoleTab] = useState<'output' | 'stdin'>('output')
+  const [isConsoleOpen, setIsConsoleOpen] = useState(true)
+
+  // 6. Submission Transition State
   const [isPending, startTransition] = useTransition()
 
   // Countdown timer effect
@@ -184,6 +253,33 @@ export default function InterviewWorkspace({
     setSelectedLanguage(newLang)
     if (code.trim() === '' || Object.values(LANGUAGE_TEMPLATES).some((t) => t.trim() === code.trim())) {
       setCode(LANGUAGE_TEMPLATES[newLang] || '// Write your solution here')
+    }
+  }
+
+  // Handle code execution in isolated sandbox runner
+  const handleRunCode = async () => {
+    if (!code.trim() || isRunningCode) return
+    setIsRunningCode(true)
+    setIsConsoleOpen(true)
+    setConsoleTab('output')
+
+    try {
+      const res = await executeCodeSandbox({
+        language: selectedLanguage,
+        code,
+        stdin: customStdin,
+      })
+      setExecutionResult(res)
+    } catch (err: unknown) {
+      setExecutionResult({
+        status: 'error',
+        stdout: '',
+        stderr: err instanceof Error ? err.message : 'Execution error occurred',
+        exitCode: 1,
+        executionTimeMs: 0,
+      })
+    } finally {
+      setIsRunningCode(false)
     }
   }
 
@@ -244,10 +340,13 @@ export default function InterviewWorkspace({
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
-    // Aggregate code and architectural notes into combined answer text
+    // Aggregate code, sandbox execution output, and architectural notes
     let combinedAnswer = ''
     if (code.trim()) {
       combinedAnswer += `\`\`\`${selectedLanguage}\n${code.trim()}\n\`\`\`\n`
+    }
+    if (executionResult?.stdout) {
+      combinedAnswer += `\n### Sandbox Test Execution Output (stdout):\n\`\`\`\n${executionResult.stdout.trim()}\n\`\`\`\n`
     }
     if (textNotes.trim()) {
       combinedAnswer += `\n### Architecture / Explanation Notes:\n${textNotes.trim()}`
@@ -415,45 +514,211 @@ export default function InterviewWorkspace({
             </button>
           </div>
 
-          {/* Language Selector (Active in Code Mode) */}
+          {/* Controls (Active in Code Mode) */}
           {activeTab === 'code' && (
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-mono text-zinc-500">Language:</span>
-              <select
-                value={selectedLanguage}
-                onChange={(e) => handleLanguageChange(e.target.value)}
-                className="bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono text-zinc-500">Language:</span>
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => handleLanguageChange(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1 text-xs text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+                >
+                  <option value="typescript">TypeScript</option>
+                  <option value="javascript">JavaScript</option>
+                  <option value="python">Python</option>
+                  <option value="sql">SQL</option>
+                </select>
+              </div>
+
+              {/* Run Code in Sandbox Button */}
+              <button
+                type="button"
+                onClick={handleRunCode}
+                disabled={isRunningCode || !code.trim()}
+                className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-medium text-xs flex items-center gap-1.5 transition-all shadow-md shadow-emerald-950/40 cursor-pointer"
               >
-                <option value="typescript">TypeScript</option>
-                <option value="javascript">JavaScript</option>
-                <option value="python">Python</option>
-                <option value="sql">SQL</option>
-              </select>
+                {isRunningCode ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Executing...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-emerald-200">▶</span>
+                    <span>Run Code</span>
+                  </>
+                )}
+              </button>
             </div>
           )}
         </div>
 
-        {/* Tab 1: Monaco Code Editor */}
+        {/* Tab 1: Monaco Code Editor & Execution Console */}
         {activeTab === 'code' && (
-          <div className="relative">
-            <Editor
-              height="440px"
-              language={selectedLanguage}
-              value={code}
-              theme="vs-dark"
-              onChange={(val) => setCode(val || '')}
-              options={{
-                minimap: { enabled: false },
-                fontSize: 13,
-                fontFamily: "var(--font-geist-mono), 'Fira Code', monospace",
-                lineNumbers: 'on',
-                scrollBeyondLastLine: false,
-                automaticLayout: true,
-                padding: { top: 12, bottom: 12 },
-                bracketPairColorization: { enabled: true },
-                wordWrap: 'on',
-              }}
-            />
+          <div className="flex flex-col">
+            <div className="relative">
+              <Editor
+                height="400px"
+                language={selectedLanguage}
+                value={code}
+                theme="vs-dark"
+                onChange={(val) => setCode(val || '')}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  fontFamily: "var(--font-geist-mono), 'Fira Code', monospace",
+                  lineNumbers: 'on',
+                  scrollBeyondLastLine: false,
+                  automaticLayout: true,
+                  padding: { top: 12, bottom: 12 },
+                  bracketPairColorization: { enabled: true },
+                  wordWrap: 'on',
+                }}
+              />
+            </div>
+
+            {/* Interactive Terminal / Execution Console */}
+            <div className="border-t border-zinc-800 bg-zinc-950/95 flex flex-col font-mono">
+              {/* Console Header Bar */}
+              <div className="flex items-center justify-between px-4 py-2 bg-zinc-900/60 border-b border-zinc-850 text-xs">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 text-zinc-300 font-semibold">
+                    <span className="text-indigo-400">⚡</span>
+                    <span>Execution Console</span>
+                  </div>
+
+                  {/* Sub-tabs: Output vs stdin */}
+                  <div className="flex items-center bg-zinc-950 rounded-lg p-0.5 border border-zinc-800 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setConsoleTab('output')}
+                      className={`px-2.5 py-0.5 rounded transition-colors ${
+                        consoleTab === 'output' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Terminal Output
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConsoleTab('stdin')}
+                      className={`px-2.5 py-0.5 rounded transition-colors ${
+                        consoleTab === 'stdin' ? 'bg-zinc-800 text-white' : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      Custom Input (stdin)
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Status Badge */}
+                  {isRunningCode ? (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-ping" />
+                      Running Sandbox
+                    </span>
+                  ) : executionResult ? (
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                        executionResult.status === 'success'
+                          ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800'
+                          : executionResult.status === 'timeout'
+                          ? 'bg-amber-950/80 text-amber-300 border-amber-800'
+                          : 'bg-red-950/80 text-red-300 border-red-800'
+                      }`}
+                    >
+                      <span>
+                        {executionResult.status === 'success'
+                          ? 'Exit 0 (Success)'
+                          : executionResult.status === 'timeout'
+                          ? 'Timed Out'
+                          : `Exit ${executionResult.exitCode ?? 1} (Error)`}
+                      </span>
+                      <span>•</span>
+                      <span>{executionResult.executionTimeMs}ms</span>
+                    </span>
+                  ) : (
+                    <span className="text-[10px] text-zinc-500">Ready to execute</span>
+                  )}
+
+                  {/* Clear Console */}
+                  {executionResult && (
+                    <button
+                      type="button"
+                      onClick={() => setExecutionResult(null)}
+                      className="text-[10px] text-zinc-400 hover:text-zinc-200 px-2 py-0.5 rounded hover:bg-zinc-800 transition-colors"
+                      title="Clear Console Output"
+                    >
+                      Clear
+                    </button>
+                  )}
+
+                  {/* Collapse Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setIsConsoleOpen(!isConsoleOpen)}
+                    className="text-zinc-400 hover:text-white px-1.5 py-0.5 text-[11px] rounded hover:bg-zinc-800 transition-colors"
+                    title={isConsoleOpen ? 'Collapse Console' : 'Expand Console'}
+                  >
+                    {isConsoleOpen ? '▼' : '▲'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Console Body Area */}
+              {isConsoleOpen && (
+                <div className="p-3.5 max-h-56 min-h-28 overflow-y-auto bg-zinc-950/90 text-xs">
+                  {consoleTab === 'output' ? (
+                    <div>
+                      {executionResult ? (
+                        <div className="space-y-2">
+                          {executionResult.stdout && (
+                            <pre className="text-zinc-200 whitespace-pre-wrap leading-relaxed select-text">
+                              {executionResult.stdout}
+                            </pre>
+                          )}
+                          {executionResult.stderr && (
+                            <pre className="text-rose-400 bg-rose-950/30 border border-rose-900/40 p-2.5 rounded-lg whitespace-pre-wrap leading-relaxed select-text">
+                              {executionResult.stderr}
+                            </pre>
+                          )}
+                          {!executionResult.stdout && !executionResult.stderr && (
+                            <span className="text-zinc-500 italic">
+                              (Program executed cleanly with no stdout output)
+                            </span>
+                          )}
+                        </div>
+                      ) : isRunningCode ? (
+                        <div className="flex items-center gap-2 text-zinc-400 italic">
+                          <div className="w-3.5 h-3.5 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+                          <span>Spawning isolated runner and executing code...</span>
+                        </div>
+                      ) : (
+                        <div className="text-zinc-500 space-y-1">
+                          <p className="text-zinc-400">$ DevInterview Isolated Runner v1.0</p>
+                          <p>$ Press &quot;▶ Run Code&quot; to compile and execute in an isolated environment with a 5.0s timeout.</p>
+                          <p className="text-[11px] text-zinc-600">Supports TypeScript (Node 24 strip-types), Python 3.14, and SQLite/SQL.</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] text-zinc-400 block">
+                        Standard Input (stdin) passed to your program on execution:
+                      </span>
+                      <textarea
+                        rows={4}
+                        value={customStdin}
+                        onChange={(e) => setCustomStdin(e.target.value)}
+                        placeholder="Type inputs line by line (e.g. 5\n1 2 3 4 5)..."
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 text-xs text-white placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono resize-none"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
