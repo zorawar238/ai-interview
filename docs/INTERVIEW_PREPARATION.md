@@ -187,3 +187,18 @@ Client-side memory (React `useState`) is volatile. If the candidate accidentally
 2. **Built-in Security:** Server Actions cannot be called by unauthorized third parties without passing through Next.js CSRF tokens and cookies.
 3. **Progressive Enhancement:** Works natively with HTML `<form action={...}>`, allowing graceful submission handling without client-side JavaScript hydration lag.
 
+---
+
+### Q13: Why does Monaco Editor require dynamic client-side loading (`ssr: false`) in Next.js App Router?
+
+#### **Short Answer:**
+Monaco Editor depends heavily on browser-specific APIs (such as `window`, `document`, and Web Workers for background syntax tokenization and intellisense). Next.js evaluates Server Components and SSR pre-renders on the Node.js server where those browser primitives do not exist. Using `next/dynamic(() => import('@monaco-editor/react'), { ssr: false })` delays editor bundle evaluation until after client hydration, preventing `"window is not defined"` crashes and keeping the initial server bundle small.
+
+---
+
+### Q14: How does progressive disclosure of hints balance candidate assistance with fair technical evaluation?
+
+#### **Short Answer:**
+In real technical interviews, an interviewer gives small, sequential nudges rather than revealing the complete solution or letting the candidate fail silently. Progressive hint disclosure allows the candidate to unblock themselves on specific constraints while the system tracks how many hints were requested, allowing the AI evaluator to reward problem recovery while adjusting the final score proportionally.
+
+

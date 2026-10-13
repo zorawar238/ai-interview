@@ -14,13 +14,13 @@ This document tracks the core concepts we will learn while building this platfor
 - [x] **Supabase Auth:** Handling sessions and JWT tokens securely with SSR cookies.
 
 ## Phase 3 & 4: AI Integration with Ollama
-- [ ] **Prompt Engineering:** Designing prompts to get consistent results.
-- [ ] **Structured Outputs:** Forcing an LLM to return valid JSON (critical for application state).
-- [ ] **Local LLMs:** Understanding how models run via Ollama and handling latency/streaming.
+- [x] **Prompt Engineering:** Designing prompts to get consistent results.
+- [x] **Structured Outputs:** Forcing an LLM to return valid JSON (critical for application state).
+- [x] **Local LLMs:** Understanding how models run via Ollama and handling latency/streaming.
 
 ## Phase 5: State Management & UI
-- [ ] **React State:** Managing the interview flow (current question, timers).
-- [ ] **Asynchronous Programming:** Handling promises when waiting for AI responses.
+- [x] **React State:** Managing the interview flow (Monaco editor, live countdown timer, progressive hints).
+- [x] **Asynchronous Programming:** Handling promises and useTransition when waiting for AI responses.
 
 ## Phase 6: Code Execution Sandbox (Future)
 - [ ] **Process Isolation:** Why we never run `eval()` on user code.

@@ -187,7 +187,43 @@ Replace the default Next.js starter page with a production-grade, responsive, da
    - Standardized scoring breakdown (Exceptional 85–100, Strong Pass 70–84, Borderline 55–69, Needs Improvement <55).
 
 **Next Steps:**
-Proceed to Milestone 6: Interactive Coding Sandbox (Monaco Editor integration) or real-time dialogue and conversational follow-ups.
+Proceed to Milestone 6: Interactive Coding Workspace (Monaco Editor, Timer, and Progressive Hints).
+
+---
+
+## Milestone 6: Monaco Code Workspace, Live Timer & Progressive Hints
+**Date:** 2026-10-13
+
+**Task Objective:**
+Upgrade the active interview session into an interactive coding workspace featuring the Monaco Editor (VS Code engine in the browser), dual code/architecture tabs, language switching, real-time countdown timer, progressive hint disclosure, and responsive submission states.
+
+**Files Created / Modified:**
+- `src/app/interview/[id]/InterviewWorkspace.tsx` (Client component featuring dynamic Monaco Editor, tab toggle, live timer, progressive hints accordion, and transition states)
+- `src/app/interview/[id]/page.tsx` (Integrated InterviewWorkspace, parsed stored hints with fallback guidance, and expanded layout to `max-w-5xl`)
+- `src/app/interview/actions.ts` (Serialized hints into question rubrics and parsed rubric strings cleanly during answer evaluation)
+- `package.json` (Added `@monaco-editor/react`)
+
+**What was implemented:**
+1. **Monaco Code Editor (`@monaco-editor/react`)**:
+   - Dynamically loaded with `ssr: false` to eliminate SSR window/DOM hydration errors.
+   - Customized with `vs-dark` theme, Geist Mono font, bracket pair colorization, line numbers, word wrap, and automatic resizing.
+   - Multi-language support: TypeScript, JavaScript, Python, and SQL with tailored boilerplate templates.
+2. **Dual Mode Workspace (Code IDE & Architecture Notes)**:
+   - Candidates can alternate between writing runnable code and drafting architectural diagrams, time/space complexity ($O(N)$) analysis, and trade-off notes.
+   - When submitting, both code and notes are automatically structured and forwarded to the local AI evaluator.
+3. **Live Interview Timer**:
+   - Client-side countdown ticking down from the interview's configured duration (e.g. 30 minutes).
+   - Visual state indicators: normal indigo badge, amber warning when under 5 minutes, red pulsating badge when under 1 minute.
+   - Includes Pause and Resume controls.
+4. **Progressive Hints Drawer**:
+   - Unlocks progressive hints sequentially (Hint 1, then Hint 2) so candidates can get unstuck without revealing the full solution.
+   - Explains that minimal hint usage is standard practice in real engineering interviews.
+5. **Evaluation Progress Feedback**:
+   - Submitting an answer triggers `useTransition`, providing an animated spinner and *"Evaluating with Ollama AI..."* status indicator.
+
+**Next Steps:**
+Proceed to Milestone 7: Isolated Code Execution (safe sandbox evaluation) or Real-Time Conversational AI Follow-ups.
+
 
 
 

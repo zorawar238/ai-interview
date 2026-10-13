@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { submitAnswerAction } from '../actions'
+import InterviewWorkspace from './InterviewWorkspace'
 import { EvaluationResult } from '@/lib/validations/evaluation'
 
 export default async function InterviewSessionPage(props: {
@@ -217,13 +217,32 @@ export default async function InterviewSessionPage(props: {
   // =========================================================================
   const questionNumber = currentQuestion ? currentQuestion.position : 1
 
+  let hints: string[] = []
+  if (currentQuestion?.rubric) {
+    try {
+      const parsed = JSON.parse(currentQuestion.rubric)
+      if (Array.isArray(parsed.hints)) {
+        hints = parsed.hints
+      }
+    } catch {
+      // not JSON
+    }
+  }
+
+  if (hints.length === 0 && currentQuestion) {
+    hints = [
+      `Consider edge cases specific to ${currentQuestion.topic} (e.g. empty collections, null checks, boundary conditions).`,
+      `Analyze the time vs space trade-offs between a naive solution and an optimized approach.`,
+    ]
+  }
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-white p-6 sm:p-12">
-      <div className="max-w-3xl mx-auto space-y-8">
+    <div className="min-h-screen bg-zinc-950 text-white p-6 sm:p-10">
+      <div className="max-w-5xl mx-auto space-y-6">
         {/* Header / Meta */}
         <div className="flex items-center justify-between pb-6 border-b border-zinc-800">
           <div>
-            <span className="text-xs uppercase tracking-wider text-indigo-400 font-semibold px-2.5 py-1 rounded-full bg-indigo-950/60 border border-indigo-800/60">
+            <span className="text-xs uppercase tracking-wider text-indigo-400 font-semibold px-2.5 py-1 rounded-full bg-indigo-950/60 border border-indigo-800/60 font-mono">
               {interview.role} ({interview.experience_level})
             </span>
             <h1 className="text-2xl font-bold mt-2 text-white">
@@ -255,56 +274,19 @@ export default async function InterviewSessionPage(props: {
           </div>
         )}
 
-        {/* Current Question Card */}
+        {/* Interactive Workspace with Monaco Code Editor, Timer, & Hints */}
         {currentQuestion && (
-          <div className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 sm:p-8 space-y-6">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-zinc-800 text-indigo-300 border border-zinc-700/60">
-                {currentQuestion.topic}
-              </span>
-              <span className="text-xs uppercase text-zinc-400 tracking-wider">
-                Difficulty: <strong className="text-zinc-200">{currentQuestion.difficulty}</strong>
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <h2 className="text-lg sm:text-xl font-medium text-white leading-relaxed">
-                {currentQuestion.prompt}
-              </h2>
-            </div>
-
-            {/* Answer Form */}
-            <form action={submitAnswerAction} className="space-y-4 pt-4 border-t border-zinc-800/80">
-              <input type="hidden" name="interviewId" value={interview.id} />
-              <input type="hidden" name="questionId" value={currentQuestion.id} />
-
-              <div>
-                <label htmlFor="answerText" className="block text-sm font-medium text-zinc-300 mb-2">
-                  Your Answer or Solution:
-                </label>
-                <textarea
-                  id="answerText"
-                  name="answerText"
-                  rows={8}
-                  required
-                  placeholder="Type your explanation, architectural tradeoffs, or code solution here..."
-                  className="w-full bg-zinc-950/80 border border-zinc-800 rounded-xl p-4 text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-zinc-600 resize-y"
-                />
-              </div>
-
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-xs text-zinc-500">
-                  Take your time to structure your thoughts clearly.
-                </span>
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-semibold text-white shadow-md shadow-indigo-600/20 transition-all text-sm flex items-center gap-2"
-                >
-                  {questionNumber === totalQuestions ? 'Submit & Finish Interview' : 'Submit & Next Question →'}
-                </button>
-              </div>
-            </form>
-          </div>
+          <InterviewWorkspace
+            interviewId={interview.id}
+            questionId={currentQuestion.id}
+            questionNumber={questionNumber}
+            totalQuestions={totalQuestions}
+            topic={currentQuestion.topic}
+            difficulty={currentQuestion.difficulty}
+            prompt={currentQuestion.prompt}
+            hints={hints}
+            durationMinutes={interview.duration_minutes || 30}
+          />
         )}
       </div>
     </div>

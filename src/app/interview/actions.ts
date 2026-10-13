@@ -85,7 +85,10 @@ export async function createInterviewAction(formData: FormData) {
       prompt: q.prompt,
       difficulty: q.difficulty,
       position: idx + 1,
-      rubric: q.rubric,
+      rubric: JSON.stringify({
+        rubric: q.rubric,
+        hints: q.hints || [],
+      }),
     }))
 
     const { error: questionsError } = await supabase
@@ -167,6 +170,16 @@ export async function submitAnswerAction(formData: FormData): Promise<void> {
   // 3. Generate automated AI evaluation using Ollama
   if (questionData) {
     try {
+      let rubricText = questionData.rubric || 'Evaluate correctness, conceptual depth, trade-offs, and practical engineering judgment.'
+      if (questionData.rubric) {
+        try {
+          const parsed = JSON.parse(questionData.rubric)
+          if (parsed.rubric) rubricText = parsed.rubric
+        } catch {
+          // Plain string
+        }
+      }
+
       const evalResult = await generateObject({
         model: ollama.chat('llama3.2'),
         schema: evaluationSchema,
@@ -175,7 +188,7 @@ export async function submitAnswerAction(formData: FormData): Promise<void> {
         Question Topic: ${questionData.topic}
         Difficulty: ${questionData.difficulty}
         Question Prompt: ${questionData.prompt}
-        Rubric / Target Expectations: ${questionData.rubric || 'Evaluate correctness, conceptual depth, trade-offs, and practical engineering judgment.'}
+        Rubric / Target Expectations: ${rubricText}
         
         Candidate's Answer:
         """

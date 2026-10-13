@@ -63,3 +63,23 @@ Record every significant engineering decision here.
 **Consequences:** Complete type safety, zero npm resolution conflicts, and straightforward configuration via `process.env.OLLAMA_BASE_URL`.
 **Conditions that would justify revisiting:** If an official `@ai-sdk/ollama` provider is published by Vercel with features not supported over the `/v1` compatibility layer.
 **Related files and tests:** `src/utils/ai/ollama.ts`, `src/app/api/generate-question/route.ts`, `src/app/api/chat/route.ts`.
+
+---
+
+**Decision ID:** 005
+**Date:** 2026-10-13
+**Status:** Accepted
+
+**Problem:** How do we integrate a professional in-browser code editor (Monaco Editor) into Next.js 16 App Router without breaking server-side rendering (SSR)?
+**Context:** Monaco Editor relies heavily on browser DOM APIs (`window`, `document`) and browser Web Workers. Rendering it directly in Server Components or during Next.js SSR causes `"window is not defined"` errors.
+**Options considered:**
+1. Plain HTML `<textarea>` with simple syntax highlighting regex.
+2. Lightweight CodeMirror.
+3. `@monaco-editor/react` loaded dynamically with `next/dynamic` and `ssr: false`.
+**Chosen decision:** **`@monaco-editor/react` with `next/dynamic({ ssr: false })`**.
+**Reasoning and evidence:** Monaco Editor is the actual editor engine powering Visual Studio Code. It provides familiar keybindings, multi-language support, font ligatures, indentation, and bracket colorization that mimic authentic coding interviews (like CoderPad and LeetCode). Using `dynamic(() => import('@monaco-editor/react'), { ssr: false })` safely isolates all browser-dependent initialization to the client after component mounting, with a skeleton fallback during initial load.
+**Tradeoffs:** Monaco has a larger bundle size than CodeMirror, but because it is dynamically imported, it is never included in the initial page bundle for the landing page or login screens.
+**Rejected alternatives and why:** Plain textarea offers a poor developer experience for code. CodeMirror is lighter but lacks the out-of-the-box VS Code fidelity and language tooling of Monaco.
+**Consequences:** Flawless coding experience during interviews with zero SSR hydration errors.
+**Conditions that would justify revisiting:** If client memory usage on low-end mobile devices becomes a limiting factor.
+**Related files and tests:** `src/app/interview/[id]/InterviewWorkspace.tsx`, `src/app/interview/[id]/page.tsx`.
