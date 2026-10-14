@@ -26,6 +26,14 @@ interface InterviewWorkspaceProps {
   hints: string[]
   durationMinutes: number
   role?: string
+  adaptiveContext?: {
+    adaptationType: 'baseline' | 'level_up' | 'scaffold' | 'lateral'
+    previousScore?: number
+    previousVerdict?: string
+    previousDifficulty?: string
+    targetDifficulty?: string
+    rationale: string
+  } | null
 }
 
 interface ChatMessage {
@@ -185,6 +193,7 @@ export default function InterviewWorkspace({
   hints,
   durationMinutes,
   role = 'Full-Stack Engineer',
+  adaptiveContext,
 }: InterviewWorkspaceProps) {
   // 1. Editor State
   const initialLanguage = topic.toLowerCase().includes('sql') ? 'sql' : 'typescript'
@@ -420,6 +429,43 @@ export default function InterviewWorkspace({
             </div>
           </div>
         </div>
+
+        {/* Adaptive Calibration Callout */}
+        {adaptiveContext && adaptiveContext.adaptationType !== 'baseline' && (
+          <div
+            className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+              adaptiveContext.adaptationType === 'level_up'
+                ? 'bg-gradient-to-r from-emerald-950/40 via-indigo-950/30 to-zinc-900 border-emerald-700/60 text-emerald-200'
+                : adaptiveContext.adaptationType === 'scaffold'
+                ? 'bg-gradient-to-r from-amber-950/40 via-zinc-900 to-zinc-900 border-amber-700/60 text-amber-200'
+                : 'bg-gradient-to-r from-sky-950/40 via-zinc-900 to-zinc-900 border-sky-700/60 text-sky-200'
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              <span
+                className={`px-2 py-0.5 rounded-md font-mono font-bold text-[10px] uppercase border ${
+                  adaptiveContext.adaptationType === 'level_up'
+                    ? 'bg-emerald-900/60 border-emerald-600 text-emerald-300'
+                    : adaptiveContext.adaptationType === 'scaffold'
+                    ? 'bg-amber-900/60 border-amber-600 text-amber-300'
+                    : 'bg-sky-900/60 border-sky-600 text-sky-300'
+                }`}
+              >
+                {adaptiveContext.adaptationType === 'level_up' && '↗ DIFFICULTY SCALED UP'}
+                {adaptiveContext.adaptationType === 'scaffold' && '🛡️ ADAPTIVE DIAGNOSTIC'}
+                {adaptiveContext.adaptationType === 'lateral' && '🔄 TOPIC TRANSITION'}
+              </span>
+              <span className="text-zinc-200 font-medium">
+                {adaptiveContext.rationale}
+              </span>
+            </div>
+            {adaptiveContext.previousScore !== undefined && (
+              <span className="text-zinc-400 font-mono text-[11px] whitespace-nowrap self-start sm:self-auto">
+                Prior Score: <strong className="text-white">{adaptiveContext.previousScore}/100</strong>
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Question Prompt */}
         <div className="space-y-2">
@@ -753,9 +799,9 @@ export default function InterviewWorkspace({
             {isPending ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Evaluating with Ollama AI...</span>
+                <span>Evaluating Solution & Calibrating Follow-up...</span>
               </>
-            ) : questionNumber === totalQuestions ? (
+            ) : questionNumber >= totalQuestions ? (
               'Submit & Finish Interview'
             ) : (
               'Submit & Next Question →'

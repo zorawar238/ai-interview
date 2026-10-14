@@ -10,9 +10,25 @@ export interface Interview {
   topics: string[]
   duration_minutes: number
   status: InterviewStatus
+  interview_mode?: 'adaptive' | 'static'
   started_at: string | null
   completed_at: string | null
   created_at: string
+}
+
+export interface AdaptiveRubricPayload {
+  rubric: string
+  hints: string[]
+  interviewMode?: 'adaptive' | 'static'
+  targetQuestions?: number
+  adaptiveContext?: {
+    adaptationType: 'baseline' | 'level_up' | 'scaffold' | 'lateral'
+    previousScore?: number
+    previousVerdict?: string
+    previousDifficulty?: string
+    targetDifficulty?: string
+    rationale: string
+  }
 }
 
 export interface Question {

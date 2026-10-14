@@ -106,3 +106,25 @@ Record every significant engineering decision here.
 **Tradeoffs:** In a multi-tenant cloud SaaS deployment, container-level isolation (Docker / gVisor / Firecracker) would be layered over this runner. For local-first developer environments, this provides 100% offline functionality with ₹0 cost and zero quota exhaustion.
 **Consequences:** Instant execution feedback for candidates across TypeScript, JavaScript, Python, and SQL with guaranteed timeout protection and zero secret leakage.
 **Related files and tests:** `src/lib/validations/execution.ts`, `src/app/api/execute/route.ts`, `src/app/interview/[id]/InterviewWorkspace.tsx`, `docs/SECURITY.md`.
+
+---
+
+**Decision ID:** 007
+**Date:** 2026-10-14
+**Status:** Accepted
+
+**Problem:** How do we transition the interview engine from a rigid, pre-generated static question list into a responsive, multi-turn adaptive interview that evaluates and calibrates questions dynamically based on actual candidate performance?
+**Context:** In real technical interviews, an interviewer does not read a static question script. If a candidate excels, the interviewer escalates the problem to test upper competency boundaries. If a candidate struggles, the interviewer adjusts down to test foundational recovery.
+**Options considered:**
+1. Generating all questions upfront and attempting to rewrite them in-place during the session (Rejected: Wasteful token generation, inflexible branching, and awkward state reconciliation).
+2. Dynamic on-demand generation: generate only Question 1 at start, evaluate candidate answers in `submitAnswerAction`, and invoke the adaptive engine to generate Question $N+1$ with explicit context on previous answers and rubrics (Chosen).
+**Chosen decision:** **Multi-turn dynamic question generation with serialized `adaptiveContext` inside `questions.rubric` and deterministic fallback safety.**
+**Reasoning and evidence:**
+- Storing `adaptiveContext`, `targetQuestions`, and `interviewMode` in the JSON payload of the `rubric` column guarantees 100% backward compatibility without breaking existing Supabase PostgreSQL instances with missing columns.
+- Starting with Question 1 drastically reduces initial interview creation latency (from ~15 seconds to ~3 seconds).
+- Thresholds are mathematically defined: $\ge 80\%$ triggers Level Up (+1 difficulty, deep internals/scaling), $< 60\%$ triggers Scaffolding (-1 difficulty or targeted diagnostic), and $60–79\%$ triggers Lateral Pivot (untested topic at same difficulty).
+- Deterministic fallback generation prevents interview deadlocks if local Ollama encounters transient timeouts.
+**Tradeoffs:** Generation latency occurs between question submissions (3–5 seconds), which is mitigated by clear UI spinners indicating *"Evaluating Solution & Calibrating Follow-up..."*.
+**Consequences:** True adaptive interviewing experience that challenges candidates at their exact frontier of knowledge.
+**Related files and tests:** `src/lib/adaptive/engine.ts`, `src/lib/validations/interview.ts`, `src/app/interview/actions.ts`, `src/app/interview/[id]/page.tsx`, `src/app/interview/[id]/InterviewWorkspace.tsx`.
+

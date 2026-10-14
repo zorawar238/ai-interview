@@ -31,3 +31,9 @@ This document tracks the core concepts we will learn while building this platfor
 - [x] **Relational Batch Aggregations:** Eliminating N+1 query overhead via SQL `IN (...)` and in-memory Map lookups.
 - [x] **Vector SVG Data Visualization:** Rendering mathematical SVG trendlines and gradient fills with zero third-party bundle weight.
 - [x] **Multi-Dimensional Progress Tracking:** Calculating topic proficiency mastery and historical score trajectories.
+
+## Phase 8: Adaptive LLM Calibration & Dynamic State Machines
+- [x] **Dynamic Multi-Turn AI Calibration:** Transitioning from static batch question generation to feedback-driven progressive single-question generation.
+- [x] **Mathematical Performance Thresholds:** Implementing discrete escalation ($\ge 80\%$), scaffolding ($< 60\%$), and lateral domain rotation ($60–79\%$).
+- [x] **Fault-Tolerant AI Workflows:** Preventing application deadlocks with deterministic fallback generators when local models experience latency or transient failures.
+

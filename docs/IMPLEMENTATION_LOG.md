@@ -322,4 +322,44 @@ Upgrade `/dashboard` into an executive candidate performance workspace with inte
    - Session cards display individual average score badges with direct deep links to `/interview/[id]`.
 
 **Next Steps:**
-Proceed to Milestone 10: Adaptive Interview Difficulty Engine or Speech/Voice Integration.
+Proceed to Milestone 10: Adaptive Interview Difficulty Engine.
+
+---
+
+## Milestone 10: Adaptive Interview Difficulty Engine & Dynamic Follow-Up Calibration
+**Date:** 2026-10-14
+
+**Task Objective:**
+Build a multi-turn adaptive interview difficulty engine that dynamically analyzes candidate performance on each submitted answer, adjusting subsequent questions in real-time (leveling up on mastery, providing scaffolding diagnostics on errors, or laterally shifting topics) to simulate realistic technical interviews.
+
+**Files Created / Modified:**
+- `src/lib/validations/interview.ts` (Added `singleQuestionSchema`, `SingleQuestion`, `AdaptiveContext`, and `interviewMode` validation)
+- `src/lib/adaptive/engine.ts` (Core adaptive state machine: dynamic step planning, score thresholds, topic rotation, and Ollama integration with graceful fallback)
+- `src/app/interview/actions.ts` (Updated `createInterviewAction` for fast single-question baseline initialization and `submitAnswerAction` for multi-turn dynamic question calibration)
+- `src/app/interview/new/page.tsx` (Added Calibration Mode UI selector with recommended Adaptive vs Fixed difficulty options)
+- `src/app/interview/[id]/page.tsx` (Dynamic question count resolution, Adaptive Calibration Path visualizer in the completed performance report, and adaptive context forwarding)
+- `src/app/interview/[id]/InterviewWorkspace.tsx` (Visual Adaptive Calibration callout badges, prior score indicators, and dynamic calibration submitting states)
+- `src/types/database.ts` (Added `interview_mode` and `AdaptiveRubricPayload` type definitions)
+- `supabase/migrations/20261014000000_adaptive_interviews.sql` (Database migration documenting the optional `interview_mode` column)
+
+**What was implemented:**
+1. **Dynamic Multi-Turn Adaptive Calibration**:
+   - Rather than pre-generating rigid static questions upfront, adaptive sessions generate Question 1 as a baseline challenge.
+   - Upon submitting each question, the answer is evaluated by Ollama (`llama3.2`), and the adaptive engine dynamically plans Question $N+1$:
+     - **Score $\ge 80$ (Level Up)**: Escalates difficulty (e.g. Medium $\to$ Hard) and challenges the candidate on deep architectural trade-offs, concurrency, and high-scale edge cases.
+     - **Score $< 60$ (Scaffolding)**: Adjusts difficulty down (e.g. Hard $\to$ Medium, Medium $\to$ Easy) or issues a targeted diagnostic to assess foundational recovery.
+     - **Score $60–79$ (Lateral Pivot)**: Maintains difficulty while pivoting to untested focus topics from the candidate's chosen domain list.
+2. **Resilient Fallback Architecture**:
+   - If local Ollama encounters transient latency or errors during follow-up generation, the engine deploys a deterministic fallback question tailored to the targeted difficulty and topic, ensuring the candidate's session never halts.
+3. **Adaptive Workspace UI**:
+   - Distinct color-coded calibration badges in Monaco Workspace:
+     - `↗ DIFFICULTY SCALED UP` (Emerald/Indigo)
+     - `🛡️ ADAPTIVE DIAGNOSTIC` (Amber)
+     - `🔄 TOPIC TRANSITION` (Sky)
+   - Displays real-time rationale notes explaining *why* the question was calibrated based on the candidate's previous score.
+4. **Adaptive Path Visualizer on Performance Report**:
+   - Completed report displays a multi-phase calibration trajectory card detailing the difficulty adjustments, scores, and AI rationale across each phase.
+
+**Next Steps:**
+Proceed to Milestone 11: Web Speech Hands-Free Audio Interview Mode or Exportable Performance PDF Reports.
+

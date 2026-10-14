@@ -4,8 +4,17 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import { generateObject } from 'ai'
 import { ollama } from '@/utils/ai/ollama'
-import { createInterviewSchema, generatedQuestionsSchema } from '@/lib/validations/interview'
-import { evaluationSchema } from '@/lib/validations/evaluation'
+import {
+  createInterviewSchema,
+  generatedQuestionsSchema,
+  singleQuestionSchema,
+} from '@/lib/validations/interview'
+import { evaluationSchema, EvaluationResult } from '@/lib/validations/evaluation'
+import {
+  getTargetQuestionCount,
+  generateAdaptiveQuestion,
+  DifficultyLevel,
+} from '@/lib/adaptive/engine'
 
 export async function createInterviewAction(formData: FormData) {
   const supabase = await createClient()
@@ -24,6 +33,7 @@ export async function createInterviewAction(formData: FormData) {
   const rawDifficulty = formData.get('difficulty') as string
   const rawTopics = formData.getAll('topics') as string[]
   const rawDuration = formData.get('durationMinutes') ? Number(formData.get('durationMinutes')) : 30
+  const rawInterviewMode = (formData.get('interviewMode') as string) || 'adaptive'
 
   const validation = createInterviewSchema.safeParse({
     role: rawRole,
@@ -31,6 +41,7 @@ export async function createInterviewAction(formData: FormData) {
     difficulty: rawDifficulty,
     topics: rawTopics,
     durationMinutes: rawDuration,
+    interviewMode: rawInterviewMode,
   })
 
   if (!validation.success) {
@@ -38,7 +49,8 @@ export async function createInterviewAction(formData: FormData) {
     redirect(`/interview/new?error=${encodeURIComponent(errorMsg)}`)
   }
 
-  const { role, experienceLevel, difficulty, topics, durationMinutes } = validation.data
+  const { role, experienceLevel, difficulty, topics, durationMinutes, interviewMode } = validation.data
+  const targetQuestions = getTargetQuestionCount(durationMinutes)
 
   let interviewId: string | null = null
 
@@ -65,42 +77,85 @@ export async function createInterviewAction(formData: FormData) {
 
     interviewId = interview.id
 
-    // 3. Generate structured questions using local Ollama model
-    const result = await generateObject({
-      model: ollama.chat('llama3.2'),
-      schema: generatedQuestionsSchema,
-      prompt: `You are an expert technical interviewer conducting an interview for a ${experienceLevel} level ${role} role.
-      Create 3 realistic, focused interview questions covering: ${topics.join(', ')}.
-      Difficulty level: ${difficulty}.
-      Make sure questions test practical understanding and problem solving rather than simple trivia.`,
-    })
+    // 3. Generate initial question(s) using local Ollama model
+    if (interviewMode === 'adaptive') {
+      // In adaptive mode, we generate the first baseline question immediately
+      const initialTopic = topics[0] || 'General Engineering'
+      const result = await generateObject({
+        model: ollama.chat('llama3.2'),
+        schema: singleQuestionSchema,
+        prompt: `You are an expert technical interviewer conducting an adaptive interview for a ${experienceLevel} level ${role} role.
+        Generate the first baseline question to assess core technical competency.
+        Topic: ${initialTopic}.
+        Difficulty level: ${difficulty}.
+        Ensure the question tests practical problem-solving and architectural judgment.
+        Include 2-3 progressive hints and evaluation rubric.`,
+      })
 
-    const questions = result.object.questions
+      const q = result.object
 
-    // 4. Insert generated questions into the questions table
-    const questionsToInsert = questions.map((q, idx) => ({
-      interview_id: interviewId,
-      type: q.type,
-      topic: q.topic,
-      prompt: q.prompt,
-      difficulty: q.difficulty,
-      position: idx + 1,
-      rubric: JSON.stringify({
-        rubric: q.rubric,
-        hints: q.hints || [],
-      }),
-    }))
+      const { error: questionError } = await supabase.from('questions').insert({
+        interview_id: interviewId,
+        type: q.type,
+        topic: q.topic || initialTopic,
+        prompt: q.prompt,
+        difficulty: q.difficulty || difficulty,
+        position: 1,
+        rubric: JSON.stringify({
+          rubric: q.rubric,
+          hints: q.hints || [],
+          interviewMode: 'adaptive',
+          targetQuestions,
+          adaptiveContext: {
+            adaptationType: 'baseline',
+            targetDifficulty: difficulty,
+            rationale: `Baseline question in ${initialTopic} to establish candidate competency.`,
+          },
+        }),
+      })
 
-    const { error: questionsError } = await supabase
-      .from('questions')
-      .insert(questionsToInsert)
+      if (questionError) {
+        console.error('Questions Insert Error:', questionError)
+        throw new Error('Failed to save baseline question to database')
+      }
+    } else {
+      // Static fixed difficulty mode: generate all 3 questions upfront
+      const result = await generateObject({
+        model: ollama.chat('llama3.2'),
+        schema: generatedQuestionsSchema,
+        prompt: `You are an expert technical interviewer conducting an interview for a ${experienceLevel} level ${role} role.
+        Create 3 realistic, focused interview questions covering: ${topics.join(', ')}.
+        Difficulty level: ${difficulty}.
+        Make sure questions test practical understanding and problem solving rather than simple trivia.`,
+      })
 
-    if (questionsError) {
-      console.error('Questions Insert Error:', questionsError)
-      throw new Error('Failed to save generated questions to database')
+      const questions = result.object.questions
+      const questionsToInsert = questions.map((q, idx) => ({
+        interview_id: interviewId,
+        type: q.type,
+        topic: q.topic,
+        prompt: q.prompt,
+        difficulty: q.difficulty,
+        position: idx + 1,
+        rubric: JSON.stringify({
+          rubric: q.rubric,
+          hints: q.hints || [],
+          interviewMode: 'static',
+          targetQuestions: questions.length,
+        }),
+      }))
+
+      const { error: questionsError } = await supabase
+        .from('questions')
+        .insert(questionsToInsert)
+
+      if (questionsError) {
+        console.error('Questions Insert Error:', questionsError)
+        throw new Error('Failed to save generated questions to database')
+      }
     }
 
-    // 5. Update interview status to 'in_progress'
+    // 4. Update interview status to 'in_progress'
     await supabase
       .from('interviews')
       .update({
@@ -121,7 +176,7 @@ export async function createInterviewAction(formData: FormData) {
     redirect(`/interview/new?error=${encodeURIComponent(message)}`)
   }
 
-  // 6. Navigate candidate to the interview session
+  // 5. Navigate candidate to the interview session
   redirect(`/interview/${interviewId}`)
 }
 
@@ -167,6 +222,8 @@ export async function submitAnswerAction(formData: FormData): Promise<void> {
     .eq('id', questionId)
     .single()
 
+  let evaluatedObject: EvaluationResult | null = null
+
   // 3. Generate automated AI evaluation using Ollama
   if (questionData) {
     try {
@@ -198,6 +255,8 @@ export async function submitAnswerAction(formData: FormData): Promise<void> {
         Provide a fair, rigorous, and constructive evaluation according to the required schema.`,
       })
 
+      evaluatedObject = evalResult.object
+
       await supabase.from('evaluations').insert({
         answer_id: insertedAnswer.id,
         interview_id: interviewId,
@@ -210,21 +269,52 @@ export async function submitAnswerAction(formData: FormData): Promise<void> {
     }
   }
 
-  // 2. Check if all questions have been answered
-  const { data: allQuestions } = await supabase
+  // 4. Fetch interview & question state to determine progression
+  const { data: interviewData } = await supabase
+    .from('interviews')
+    .select('role, experience_level, difficulty, topics, duration_minutes')
+    .eq('id', interviewId)
+    .single()
+
+  const { data: rawAllQuestions } = await supabase
     .from('questions')
-    .select('id')
+    .select('*')
     .eq('interview_id', interviewId)
+    .order('position', { ascending: true })
 
-  const { data: allAnswers } = await supabase
+  const allQuestions = rawAllQuestions ?? []
+
+  const { data: rawAllAnswers } = await supabase
     .from('answers')
-    .select('question_id')
+    .select('id, question_id')
     .eq('interview_id', interviewId)
 
-  const answeredCount = allAnswers ? allAnswers.length : 0
-  const totalCount = allQuestions ? allQuestions.length : 0
+  const allAnswers = rawAllAnswers ?? []
 
-  if (totalCount > 0 && answeredCount >= totalCount) {
+  const answeredCount = allAnswers.length
+
+  // Determine interview mode & target question count
+  let targetQuestions = 3
+  let interviewMode: 'adaptive' | 'static' = 'adaptive'
+
+  if (allQuestions.length > 0 && allQuestions[0].rubric) {
+    try {
+      const parsed = JSON.parse(allQuestions[0].rubric)
+      if (typeof parsed.targetQuestions === 'number') {
+        targetQuestions = parsed.targetQuestions
+      }
+      if (parsed.interviewMode) {
+        interviewMode = parsed.interviewMode
+      }
+    } catch {}
+  } else if (interviewData?.duration_minutes) {
+    targetQuestions = getTargetQuestionCount(interviewData.duration_minutes)
+  }
+
+  // Check if session has reached target question limit
+  const isFinalQuestion = answeredCount >= targetQuestions || (interviewMode === 'static' && answeredCount >= allQuestions.length)
+
+  if (isFinalQuestion) {
     // Complete the interview
     await supabase
       .from('interviews')
@@ -235,6 +325,54 @@ export async function submitAnswerAction(formData: FormData): Promise<void> {
       .eq('id', interviewId)
 
     redirect(`/interview/${interviewId}?completed=true`)
+  }
+
+  // 5. Adaptive Engine: Dynamically generate next calibrated question
+  if (interviewMode === 'adaptive' && answeredCount < targetQuestions) {
+    const nextPosition = answeredCount + 1
+    const alreadyExists = allQuestions.some((q) => q.position === nextPosition)
+
+    if (!alreadyExists && interviewData) {
+      const usedTopics = allQuestions.map((q) => q.topic)
+      const prevDifficulty = (questionData?.difficulty as DifficultyLevel) || 'medium'
+      const fallbackScore = evaluatedObject?.score ?? 70
+
+      const { question: nextQuestion, adaptiveContext } = await generateAdaptiveQuestion({
+        role: interviewData.role,
+        experienceLevel: interviewData.experience_level,
+        availableTopics: interviewData.topics || [],
+        usedTopics,
+        previousQuestion: {
+          prompt: questionData?.prompt || '',
+          topic: questionData?.topic || '',
+          difficulty: prevDifficulty,
+        },
+        previousAnswer: answerText.trim(),
+        previousEvaluation: evaluatedObject || {
+          score: fallbackScore,
+          performanceVerdict: fallbackScore >= 70 ? 'Strong Pass' : 'Borderline',
+          strengths: [],
+          areasForImprovement: [],
+        },
+        position: nextPosition,
+      })
+
+      await supabase.from('questions').insert({
+        interview_id: interviewId,
+        type: nextQuestion.type,
+        topic: nextQuestion.topic,
+        prompt: nextQuestion.prompt,
+        difficulty: nextQuestion.difficulty,
+        position: nextPosition,
+        rubric: JSON.stringify({
+          rubric: nextQuestion.rubric,
+          hints: nextQuestion.hints || [],
+          interviewMode: 'adaptive',
+          targetQuestions,
+          adaptiveContext,
+        }),
+      })
+    }
   }
 
   redirect(`/interview/${interviewId}`)

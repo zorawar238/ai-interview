@@ -118,9 +118,12 @@ export default async function NewInterviewPage(props: {
 
           {/* Difficulty */}
           <div className="space-y-3">
-            <label className="block text-sm font-semibold text-zinc-200">
-              3. Difficulty
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-semibold text-zinc-200">
+                3. Starting Difficulty (Baseline)
+              </label>
+              <span className="text-[11px] text-zinc-400 font-mono">Calibrated for Question 1</span>
+            </div>
             <div className="grid grid-cols-3 gap-3">
               {[
                 { id: 'easy', label: 'Easy', badge: 'Foundational' },
@@ -145,10 +148,56 @@ export default async function NewInterviewPage(props: {
             </div>
           </div>
 
+          {/* Interview Calibration Mode */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-semibold text-zinc-200">
+                4. Calibration Mode
+              </label>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-mono">
+                Adaptive Engine
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="relative flex flex-col p-4 rounded-xl border border-zinc-700/70 bg-zinc-800/40 hover:bg-zinc-800 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-950/30 transition-all">
+                <input
+                  type="radio"
+                  name="interviewMode"
+                  value="adaptive"
+                  defaultChecked
+                  className="sr-only"
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-white flex items-center gap-2">
+                    <span>⚡ Adaptive Calibration</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 font-mono border border-indigo-800/60">
+                      Recommended
+                    </span>
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+                  AI actively scales difficulty and topics in real-time based on your submitted code and rubric scores.
+                </p>
+              </label>
+              <label className="relative flex flex-col p-4 rounded-xl border border-zinc-700/70 bg-zinc-800/40 hover:bg-zinc-800 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-950/30 transition-all">
+                <input
+                  type="radio"
+                  name="interviewMode"
+                  value="static"
+                  className="sr-only"
+                />
+                <span className="text-sm font-semibold text-white">Fixed Difficulty</span>
+                <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+                  All questions are locked at your selected starting difficulty without dynamic adjustments.
+                </p>
+              </label>
+            </div>
+          </div>
+
           {/* Topics Multi-Select */}
           <div className="space-y-3">
             <label className="block text-sm font-semibold text-zinc-200">
-              4. Focus Topics <span className="text-xs font-normal text-zinc-400">(Pick at least 1)</span>
+              5. Focus Topics <span className="text-xs font-normal text-zinc-400">(Pick at least 1)</span>
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {topicOptions.map((topic, idx) => (
@@ -172,7 +221,7 @@ export default async function NewInterviewPage(props: {
           {/* Duration */}
           <div className="space-y-3">
             <label htmlFor="durationMinutes" className="block text-sm font-semibold text-zinc-200">
-              5. Expected Duration
+              6. Expected Duration
             </label>
             <div className="grid grid-cols-3 gap-3">
               {[

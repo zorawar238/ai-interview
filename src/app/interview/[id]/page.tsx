@@ -3,6 +3,8 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import InterviewWorkspace from './InterviewWorkspace'
 import { EvaluationResult } from '@/lib/validations/evaluation'
+import { AdaptiveContext } from '@/lib/validations/interview'
+import { getTargetQuestionCount } from '@/lib/adaptive/engine'
 
 export default async function InterviewSessionPage(props: {
   params: Promise<{ id: string }>
@@ -32,30 +34,57 @@ export default async function InterviewSessionPage(props: {
   }
 
   // 2. Fetch questions for this interview
-  const { data: questions = [] } = await supabase
+  const { data: rawQuestions } = await supabase
     .from('questions')
     .select('*')
     .eq('interview_id', id)
     .order('position', { ascending: true })
 
+  const questions = rawQuestions ?? []
+
   // 3. Fetch existing answers & evaluations
-  const { data: answers = [] } = await supabase
+  const { data: rawAnswers } = await supabase
     .from('answers')
     .select('*')
     .eq('interview_id', id)
 
-  const { data: evaluations = [] } = await supabase
+  const answers = rawAnswers ?? []
+
+  const { data: rawEvaluations } = await supabase
     .from('evaluations')
     .select('*')
     .eq('interview_id', id)
 
-  const answeredQuestionIds = new Set((answers || []).map((a) => a.question_id))
-  const answeredCount = answers ? answers.length : 0
-  const totalQuestions = questions ? questions.length : 0
+  const evaluations = rawEvaluations ?? []
+
+  const answeredQuestionIds = new Set(answers.map((a) => a.question_id))
+  const answeredCount = answers.length
+
+  // Calculate target questions and total questions dynamically
+  let targetQuestions = 3
+  let interviewMode: 'adaptive' | 'static' = 'adaptive'
+  if (questions.length > 0 && questions[0].rubric) {
+    try {
+      const parsed = JSON.parse(questions[0].rubric)
+      if (typeof parsed.targetQuestions === 'number') {
+        targetQuestions = parsed.targetQuestions
+      }
+      if (parsed.interviewMode) {
+        interviewMode = parsed.interviewMode
+      }
+    } catch {}
+  } else if (interview.duration_minutes) {
+    targetQuestions = getTargetQuestionCount(interview.duration_minutes)
+  }
+
+  const totalQuestions = Math.max(targetQuestions, questions.length)
 
   // 4. Find the first unanswered question
   const currentQuestion = (questions || []).find((q) => !answeredQuestionIds.has(q.id))
-  const isCompleted = interview.status === 'completed' || searchParams.completed === 'true' || (!currentQuestion && totalQuestions > 0)
+  const isCompleted =
+    interview.status === 'completed' ||
+    searchParams.completed === 'true' ||
+    (answeredCount >= totalQuestions && totalQuestions > 0)
 
   // Calculate aggregate score
   const validScores = (evaluations || []).map((e) => e.score).filter((s): s is number => typeof s === 'number')
@@ -70,8 +99,8 @@ export default async function InterviewSessionPage(props: {
         <div className="max-w-4xl mx-auto space-y-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-zinc-800">
             <div>
-              <span className="text-xs uppercase tracking-wider text-emerald-400 font-semibold px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/60">
-                Completed
+              <span className="text-xs uppercase tracking-wider text-emerald-400 font-semibold px-2.5 py-1 rounded-full bg-emerald-950/60 border border-emerald-800/60 font-mono">
+                Completed • {interviewMode === 'adaptive' ? 'Adaptive Session' : 'Standard Session'}
               </span>
               <h1 className="text-3xl font-bold mt-3 text-white">Interview Performance Report</h1>
               <p className="text-zinc-400 text-sm mt-1">
@@ -103,13 +132,89 @@ export default async function InterviewSessionPage(props: {
                     : 'Foundational Gaps Identified'}
                 </h3>
                 <p className="text-sm text-zinc-400 mt-2 max-w-xl">
-                  Evaluated across {totalQuestions} questions by your local AI interviewer based on technical accuracy, edge-case consideration, and communication.
+                  Evaluated across {questions.length} questions by your local AI interviewer based on technical accuracy, edge-case consideration, and communication.
                 </p>
               </div>
 
               <div className="flex flex-col items-center justify-center p-5 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 min-w-[130px]">
                 <span className="text-4xl font-extrabold text-indigo-400">{averageScore}</span>
                 <span className="text-xs text-zinc-500 font-medium uppercase mt-1">Score / 100</span>
+              </div>
+            </div>
+          )}
+
+          {/* Adaptive Calibration Trajectory Breakdown */}
+          {questions.length > 0 && (
+            <div className="bg-zinc-900/70 border border-zinc-800 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-semibold text-white">⚡ Adaptive Calibration Path</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono">
+                    Real-time AI Adjustment
+                  </span>
+                </div>
+                <span className="text-xs text-zinc-400 font-mono">
+                  {questions.length} Calibrated Steps
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
+                {questions.map((q, qIdx) => {
+                  const ans = (answers || []).find((a) => a.question_id === q.id)
+                  const ev = ans ? (evaluations || []).find((e) => e.answer_id === ans.id) : null
+                  let qContext: AdaptiveContext | null = null
+                  try {
+                    if (q.rubric) {
+                      const parsed = JSON.parse(q.rubric)
+                      qContext = parsed.adaptiveContext || null
+                    }
+                  } catch {}
+
+                  const isLevelUp = qContext?.adaptationType === 'level_up'
+                  const isScaffold = qContext?.adaptationType === 'scaffold'
+
+                  return (
+                    <div
+                      key={q.id}
+                      className="rounded-xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-2.5 flex flex-col justify-between"
+                    >
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-semibold text-zinc-300 font-mono">Phase {qIdx + 1}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded uppercase font-mono text-[10px] border ${
+                              q.difficulty === 'hard'
+                                ? 'bg-red-950/60 text-red-300 border-red-800/60'
+                                : q.difficulty === 'medium'
+                                ? 'bg-indigo-950/60 text-indigo-300 border-indigo-800/60'
+                                : 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
+                            }`}
+                          >
+                            {q.difficulty}
+                          </span>
+                        </div>
+                        <p className="text-sm font-medium text-white truncate">{q.topic}</p>
+                      </div>
+
+                      <div className="space-y-2 pt-2 border-t border-zinc-850 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-zinc-400">Score:</span>
+                          <span className="font-mono font-bold text-indigo-300">
+                            {ev?.score !== null && ev?.score !== undefined ? `${ev.score}/100` : '—'}
+                          </span>
+                        </div>
+                        {qContext && (
+                          <div className="text-[11px] text-zinc-400 leading-snug">
+                            {isLevelUp && <span className="text-emerald-400 font-semibold block">↗ Scaled Up Challenge</span>}
+                            {isScaffold && <span className="text-amber-400 font-semibold block">🛡️ Targeted Scaffolding</span>}
+                            {!isLevelUp && !isScaffold && <span className="text-indigo-400 font-semibold block">🎯 Baseline Challenge</span>}
+                            <span className="line-clamp-2 mt-0.5">{qContext.rationale}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -218,11 +323,16 @@ export default async function InterviewSessionPage(props: {
   const questionNumber = currentQuestion ? currentQuestion.position : 1
 
   let hints: string[] = []
+  let currentAdaptiveContext: AdaptiveContext | null = null
+
   if (currentQuestion?.rubric) {
     try {
       const parsed = JSON.parse(currentQuestion.rubric)
       if (Array.isArray(parsed.hints)) {
         hints = parsed.hints
+      }
+      if (parsed.adaptiveContext) {
+        currentAdaptiveContext = parsed.adaptiveContext
       }
     } catch {
       // not JSON
@@ -274,7 +384,7 @@ export default async function InterviewSessionPage(props: {
           </div>
         )}
 
-        {/* Interactive Workspace with Monaco Code Editor, Timer, & Hints */}
+        {/* Interactive Workspace with Monaco Code Editor, Timer, Hints & Adaptive Calibration */}
         {currentQuestion && (
           <InterviewWorkspace
             interviewId={interview.id}
@@ -285,6 +395,7 @@ export default async function InterviewSessionPage(props: {
             difficulty={currentQuestion.difficulty}
             prompt={currentQuestion.prompt}
             hints={hints}
+            adaptiveContext={currentAdaptiveContext}
             durationMinutes={interview.duration_minutes || 30}
             role={interview.role}
           />
