@@ -391,6 +391,35 @@ Transform the technical interview workspace into an interactive audio experience
    - Candidates can toggle `🔊 Auto-Voice` to have streamed interviewer responses spoken aloud automatically, or click `🔊 Listen` on individual assistant messages.
 
 **Next Steps:**
-Proceed to Milestone 12: Exportable Candidate Performance Report (Printable PDF View & Clean Markdown Download) or Next.js 16 Middleware Modernization.
+Proceed to Milestone 12: Exportable Candidate Performance Report & Next.js 16 Proxy Modernization.
+
+---
+
+## Milestone 12: Exportable Candidate Performance Report & Next.js 16 Proxy Modernization
+**Date:** 2026-10-14
+
+**Task Objective:**
+Empower candidates to export and share their technical interview evaluations via printable PDF generation with ink-friendly styling, complete Markdown summary download, and clipboard sharing, alongside modernizing Next.js 16 middleware conventions.
+
+**Files Created / Modified:**
+- `src/app/interview/[id]/ReportExportActions.tsx` (Client component providing one-click Markdown file download, browser PDF print trigger, and quick summary clipboard copy)
+- `src/app/interview/[id]/page.tsx` (Integrated `ReportExportActions` into the completed performance report view and added print container layout rules)
+- `src/app/globals.css` (Added `@media print` rules: white background, dark typography, `.no-print` element suppression, and page-break avoidance on question cards)
+- `src/proxy.ts` (Migrated deprecated `src/middleware.ts` to the official Next.js 16 `proxy` convention, eliminating Turbopack deprecation notices)
+
+**What was implemented:**
+1. **One-Click Markdown File Download**:
+   - Generates a standalone, comprehensive `.md` report directly in the browser via `Blob` and dynamic URL object.
+   - Contains executive summary, mean score, role/difficulty metadata, adaptive calibration matrix, and question-by-question breakdown with candidate solutions, feedback, and key strengths.
+2. **Ink-Friendly PDF & Print Engine**:
+   - Built with native `@media print` CSS: inverts the dark-mode layout to crisp white and dark slate, hides navigation and buttons, and sets `page-break-inside: avoid` on question breakdown cards to prevent mid-card pagination tears.
+3. **Quick Summary Clipboard Copy**:
+   - Copies a clean, concise bulleted summary to the system clipboard with an animated confirmation checkmark.
+4. **Next.js 16 Proxy Convention Modernization**:
+   - Migrated `src/middleware.ts` to `src/proxy.ts` exporting `export async function proxy(request: NextRequest)`, eliminating the `middleware` deprecation warning during `next build`.
+
+**Next Steps:**
+The core product vision and all advanced technical interview milestones (Auth, PostgreSQL RLS, Local Ollama Inference, Code Sandbox, Analytics, Monaco Workspace, Live Dialogue, Adaptive Difficulty Engine, Web Speech Audio Mode, and Export Engine) are now fully implemented, tested, and production-ready!
+
 
 

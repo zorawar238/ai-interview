@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import InterviewWorkspace from './InterviewWorkspace'
+import ReportExportActions from './ReportExportActions'
 import { EvaluationResult } from '@/lib/validations/evaluation'
 import { AdaptiveContext } from '@/lib/validations/interview'
 import { getTargetQuestionCount } from '@/lib/adaptive/engine'
@@ -95,7 +96,7 @@ export default async function InterviewSessionPage(props: {
   // =========================================================================
   if (isCompleted) {
     return (
-      <div className="min-h-screen bg-zinc-950 text-white p-6 sm:p-12">
+      <div className="min-h-screen bg-zinc-950 text-white p-6 sm:p-12 print-page">
         <div className="max-w-4xl mx-auto space-y-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-6 border-b border-zinc-800">
             <div>
@@ -107,12 +108,30 @@ export default async function InterviewSessionPage(props: {
                 Role: <strong className="text-white">{interview.role}</strong> ({interview.experience_level}) • Difficulty: {interview.difficulty}
               </p>
             </div>
-            <Link
-              href="/dashboard"
-              className="px-4 py-2 text-sm font-medium rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white transition-all border border-zinc-700/80"
-            >
-              Return to Dashboard
-            </Link>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <ReportExportActions
+                interview={{
+                  id: interview.id,
+                  role: interview.role,
+                  experience_level: interview.experience_level,
+                  difficulty: interview.difficulty,
+                  duration_minutes: interview.duration_minutes,
+                  interview_mode: interviewMode,
+                  created_at: interview.created_at,
+                }}
+                questions={questions}
+                answers={answers}
+                evaluations={evaluations}
+                averageScore={averageScore}
+              />
+              <Link
+                href="/dashboard"
+                className="no-print px-4 py-2 text-sm font-medium rounded-xl bg-zinc-800 hover:bg-zinc-700 text-white transition-all border border-zinc-700/80"
+              >
+                Dashboard
+              </Link>
+            </div>
           </div>
 
           {/* Aggregate Performance Overview Card */}
@@ -237,7 +256,7 @@ export default async function InterviewSessionPage(props: {
               return (
                 <div
                   key={q.id}
-                  className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 space-y-5"
+                  className="bg-zinc-900/80 border border-zinc-800 rounded-2xl p-6 space-y-5 print-card"
                 >
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-zinc-800 text-indigo-300">

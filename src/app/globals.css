@@ -26,3 +26,38 @@ html {
 body {
   font-family: var(--font-geist-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
+
+@media print {
+  /* Hide interactive chrome and buttons */
+  .no-print {
+    display: none !important;
+  }
+
+  body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .print-page {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* Prevent awkward page break splitting across question cards */
+  .print-card {
+    background-color: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #0f172a !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 1.5rem !important;
+    box-shadow: none !important;
+  }
+
+  .print-card * {
+    color: #0f172a !important;
+  }
+}
+

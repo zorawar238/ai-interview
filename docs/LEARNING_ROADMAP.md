@@ -42,4 +42,10 @@ This document tracks the core concepts we will learn while building this platfor
 - [x] **React 19 External Store Synchronization:** Utilizing `useSyncExternalStore` to read non-React platform APIs (speech recognition availability, dynamic voice lists) without triggering cascading renders or hydration mismatch.
 - [x] **Audio Content Sanitization:** Preprocessing markdown AST and code blocks into speech-friendly natural prose.
 
+## Phase 10: Client-Side Document Synthesis, Print Layouts & Next.js 16 Proxy Architecture
+- [x] **In-Memory Blob Synthesis:** Creating portable markdown files dynamically on the client via `new Blob()` and `URL.createObjectURL()` without server roundtrips.
+- [x] **Vector Print Stylesheets (`@media print`):** Preventing dark-mode ink wastage, suppressing navigation chrome, and enforcing page break isolation (`break-inside: avoid`).
+- [x] **Next.js 16 Proxy Conventions:** Transitioning from deprecated `middleware.ts` to edge-ready `proxy.ts`.
+
+
 

@@ -150,4 +150,26 @@ Record every significant engineering decision here.
 **Consequences:** High-fidelity hands-free mock interview experience with spoken questions and voice thought dictation at zero cost.
 **Related files and tests:** `src/hooks/useWebSpeech.ts`, `src/app/interview/[id]/InterviewWorkspace.tsx`.
 
+---
+
+**Decision ID:** 009
+**Date:** 2026-10-14
+**Status:** Accepted
+
+**Problem:** How do we enable candidates to export, save, and share their completed technical evaluations as high-quality PDFs and Markdown documents with ₹0 server rendering cost, and resolve the Next.js 16 `middleware` deprecation notice?
+**Context:** Candidates need portable artifacts of their practice sessions to review offline, attach to portfolio repositories, or send to mentors. Server-side PDF generators (Puppeteer/Playwright) are notoriously heavy, slow, and expensive to host. Additionally, Next.js 16 deprecated `middleware.ts` in favor of `proxy.ts`.
+**Options considered:**
+1. Server-side headless Chrome / PDF generation (Puppeteer) (Rejected: Excessive memory footprint, multi-second latency, and complex cloud dependencies).
+2. Client-side Blob creation for Markdown + CSS `@media print` engine for browser PDF rendering (Chosen).
+3. Migrating `middleware.ts` to `src/proxy.ts` (Chosen).
+**Chosen decision:** **Client-side Markdown Blob synthesis, media print page-break containment, and migration to Next.js 16 `proxy.ts`.**
+**Reasoning and evidence:**
+- Client-side `Blob` and `URL.createObjectURL()` download complete `.md` reports instantly with zero network roundtrips and zero server load.
+- Modern browser print engines (`window.print()`) generate pixel-perfect vector PDFs natively; by setting `@media print` with white backgrounds and `page-break-inside: avoid` on question cards, candidates get clean multi-page PDFs without dark-mode toner waste.
+- Modernizing `src/middleware.ts` to `src/proxy.ts` strictly aligns with Next.js 16 conventions and eliminates compiler warnings.
+**Tradeoffs:** PDF visual appearance is governed by browser print dialogs rather than fixed server layouts, which is offset by strict print CSS tokens.
+**Consequences:** Instant export capabilities and a warning-free, forward-compatible Next.js 16 build.
+**Related files and tests:** `src/app/interview/[id]/ReportExportActions.tsx`, `src/app/interview/[id]/page.tsx`, `src/app/globals.css`, `src/proxy.ts`.
+
+
 
