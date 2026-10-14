@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useTransition, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { submitAnswerAction } from '../actions'
+import { useWebSpeech } from '@/hooks/useWebSpeech'
 
 // Dynamically import Monaco Editor to avoid SSR window errors
 const Editor = dynamic(() => import('@monaco-editor/react'), {
@@ -233,6 +234,54 @@ export default function InterviewWorkspace({
   // 6. Submission Transition State
   const [isPending, startTransition] = useTransition()
 
+  // 7. Web Speech (Audio Interviewer & Dictation)
+  const [autoSpeakAssistant, setAutoSpeakAssistant] = useState(false)
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
+
+  // Speech synthesis player for reading questions and assistant responses
+  const speechPlayer = useWebSpeech()
+
+  // Speech-to-text dictation for Architecture Notes
+  const notesSpeech = useWebSpeech({
+    onTranscript: (spokenText) => {
+      setTextNotes((prev) => (prev ? `${prev} ${spokenText}` : spokenText))
+    },
+  })
+
+  // Speech-to-text dictation for AI Interviewer Chat Input
+  const chatSpeech = useWebSpeech({
+    onTranscript: (spokenText) => {
+      setChatInput((prev) => (prev ? `${prev} ${spokenText}` : spokenText))
+    },
+  })
+
+  // Cleanly stop audio on unmount
+  useEffect(() => {
+    return () => {
+      speechPlayer.stopSpeaking()
+      notesSpeech.stopListening()
+      chatSpeech.stopListening()
+    }
+  }, [speechPlayer, notesSpeech, chatSpeech])
+
+  const handleToggleQuestionAudio = () => {
+    if (speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt)) {
+      speechPlayer.stopSpeaking()
+    } else {
+      speechPlayer.speak(`Question ${questionNumber} of ${totalQuestions} in ${topic}. ${prompt}`)
+    }
+  }
+
+  const handleToggleMessageAudio = (msgId: string, content: string) => {
+    if (speechPlayer.isSpeaking && speakingMessageId === msgId) {
+      speechPlayer.stopSpeaking()
+      setSpeakingMessageId(null)
+    } else {
+      setSpeakingMessageId(msgId)
+      speechPlayer.speak(content, () => setSpeakingMessageId(null))
+    }
+  }
+
   // Countdown timer effect
   useEffect(() => {
     if (isTimerPaused || secondsRemaining <= 0) return
@@ -305,6 +354,11 @@ export default function InterviewWorkspace({
     setChatMessages([...newMessages, assistantMsg])
     setChatInput('')
     setIsChatStreaming(true)
+    if (chatSpeech.isListening) {
+      chatSpeech.stopListening()
+    }
+
+    let accumulatedText = ''
 
     try {
       await streamChatResponse({
@@ -320,6 +374,7 @@ export default function InterviewWorkspace({
         },
         currentCode: code,
         onChunk: (accumulated) => {
+          accumulatedText = accumulated
           setChatMessages((prev) =>
             prev.map((m) =>
               m.id === assistantMsg.id ? { ...m, content: accumulated } : m
@@ -327,6 +382,11 @@ export default function InterviewWorkspace({
           )
         },
       })
+
+      if (autoSpeakAssistant && accumulatedText) {
+        setSpeakingMessageId(assistantMsg.id)
+        speechPlayer.speak(accumulatedText, () => setSpeakingMessageId(null))
+      }
     } catch (err: unknown) {
       console.error('Chat error:', err)
       setChatMessages((prev) =>
@@ -395,6 +455,23 @@ export default function InterviewWorkspace({
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Audio Interviewer Read Aloud Button */}
+            {speechPlayer.isTTSSupported && (
+              <button
+                type="button"
+                onClick={handleToggleQuestionAudio}
+                className={`px-3 py-1.5 rounded-xl border text-xs font-medium transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
+                  speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt)
+                    ? 'bg-rose-950/80 hover:bg-rose-900 border-rose-700/80 text-rose-200 animate-pulse'
+                    : 'bg-zinc-800/80 hover:bg-zinc-750 border-zinc-700/70 text-zinc-300 hover:text-white'
+                }`}
+                title="Listen to Interviewer articulate this problem scenario"
+              >
+                <span>{speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt) ? '⏹' : '🔊'}</span>
+                <span>{speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt) ? 'Stop Audio' : 'Listen'}</span>
+              </button>
+            )}
+
             {/* AI Interviewer Dialogue Toggle Button */}
             <button
               type="button"
@@ -770,15 +847,50 @@ export default function InterviewWorkspace({
 
         {/* Tab 2: Architecture & Trade-offs Text Notes */}
         {activeTab === 'notes' && (
-          <div className="p-4 space-y-2 bg-zinc-950/60">
-            <span className="text-xs text-zinc-400 block">
-              Describe your design, time/space complexity ($O(N)$), trade-offs, and failure recovery:
-            </span>
+          <div className="p-4 space-y-3 bg-zinc-950/60">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-xs text-zinc-400 block">
+                Describe your design, time/space complexity ($O(N)$), trade-offs, and failure recovery:
+              </span>
+
+              {notesSpeech.isSTTSupported && (
+                <button
+                  type="button"
+                  onClick={notesSpeech.toggleListening}
+                  className={`self-start sm:self-auto px-3 py-1.5 rounded-lg border text-xs font-medium transition-all flex items-center gap-2 cursor-pointer shadow-sm ${
+                    notesSpeech.isListening
+                      ? 'bg-red-950/90 border-red-600 text-red-200 animate-pulse'
+                      : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-white'
+                  }`}
+                  title={notesSpeech.isListening ? 'Stop voice recording' : 'Dictate your architectural explanation'}
+                >
+                  <span className={`w-2 h-2 rounded-full ${notesSpeech.isListening ? 'bg-red-500 animate-ping' : 'bg-zinc-500'}`} />
+                  <span>{notesSpeech.isListening ? 'Listening (Click to Stop)...' : '🎙️ Dictate Thoughts'}</span>
+                </button>
+              )}
+            </div>
+
+            {notesSpeech.isListening && (
+              <div className="p-2.5 rounded-lg bg-red-950/30 border border-red-900/50 text-red-200 text-xs flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <span className="animate-spin text-sm">🎙️</span>
+                  <span>Transcribing speech in real-time... Speak your design thoughts aloud.</span>
+                </span>
+                <span className="text-[11px] text-red-300 font-mono">Microphone Active</span>
+              </div>
+            )}
+
+            {notesSpeech.recognitionError && (
+              <div className="p-2.5 rounded-lg bg-amber-950/40 border border-amber-800/60 text-amber-200 text-xs">
+                {notesSpeech.recognitionError}
+              </div>
+            )}
+
             <textarea
               rows={16}
               value={textNotes}
               onChange={(e) => setTextNotes(e.target.value)}
-              placeholder="Explain your approach, system boundaries, race condition handling, or complexity analysis here..."
+              placeholder="Explain your approach, system boundaries, race condition handling, or complexity analysis here (or click Dictate Thoughts)..."
               className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-white text-xs sm:text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-zinc-600 resize-y"
             />
           </div>
@@ -830,14 +942,31 @@ export default function InterviewWorkspace({
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setIsChatOpen(false)}
-              className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors text-lg"
-              title="Close Chat"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-3">
+              {speechPlayer.isTTSSupported && (
+                <label className="flex items-center gap-1.5 text-[11px] text-zinc-400 hover:text-zinc-200 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoSpeakAssistant}
+                    onChange={(e) => setAutoSpeakAssistant(e.target.checked)}
+                    className="rounded border-zinc-700 bg-zinc-800 text-indigo-600 focus:ring-indigo-500 h-3 w-3"
+                  />
+                  <span>Auto-Voice</span>
+                </label>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setIsChatOpen(false)
+                  speechPlayer.stopSpeaking()
+                  chatSpeech.stopListening()
+                }}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg hover:bg-zinc-800 transition-colors text-lg"
+                title="Close Chat"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           {/* Quick Suggestion Chips */}
@@ -868,9 +997,25 @@ export default function InterviewWorkspace({
                   msg.role === 'user' ? 'items-end' : 'items-start'
                 }`}
               >
-                <span className="text-[10px] text-zinc-500 font-mono mb-1">
-                  {msg.role === 'user' ? 'You' : 'Interviewer'}
-                </span>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {msg.role === 'user' ? 'You' : 'Interviewer'}
+                  </span>
+                  {msg.role === 'assistant' && msg.content && speechPlayer.isTTSSupported && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleMessageAudio(msg.id, msg.content)}
+                      className={`text-[10px] px-1 rounded transition-colors cursor-pointer ${
+                        speakingMessageId === msg.id
+                          ? 'text-indigo-400 bg-indigo-950/80 animate-pulse'
+                          : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800'
+                      }`}
+                      title={speakingMessageId === msg.id ? 'Stop Speaking' : 'Read message aloud'}
+                    >
+                      {speakingMessageId === msg.id ? '⏹ Stop' : '🔊 Listen'}
+                    </button>
+                  )}
+                </div>
                 <div
                   className={`p-3.5 rounded-2xl text-xs sm:text-sm leading-relaxed max-w-[88%] ${
                     msg.role === 'user'
@@ -885,19 +1030,33 @@ export default function InterviewWorkspace({
             <div ref={chatMessagesEndRef} />
           </div>
 
-          {/* Message Input Box */}
+          {/* Message Input Box with Voice Dictation */}
           <form
             onSubmit={(e) => {
               e.preventDefault()
               handleSendChatMessage()
             }}
-            className="p-3.5 border-t border-zinc-800 bg-zinc-900/60 flex gap-2"
+            className="p-3.5 border-t border-zinc-800 bg-zinc-900/60 flex items-center gap-2"
           >
+            {chatSpeech.isSTTSupported && (
+              <button
+                type="button"
+                onClick={chatSpeech.toggleListening}
+                className={`p-2 rounded-xl border text-sm transition-all cursor-pointer flex items-center justify-center ${
+                  chatSpeech.isListening
+                    ? 'bg-red-950/90 border-red-600 text-red-300 animate-pulse'
+                    : 'bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700'
+                }`}
+                title={chatSpeech.isListening ? 'Stop Dictating' : 'Dictate your question via microphone'}
+              >
+                🎙️
+              </button>
+            )}
             <input
               type="text"
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
-              placeholder="Ask a clarifying question or discuss an assumption..."
+              placeholder={chatSpeech.isListening ? 'Listening... Speak your question' : 'Ask a clarifying question or discuss an assumption...'}
               disabled={isChatStreaming}
               className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 placeholder:text-zinc-500 disabled:opacity-50"
             />

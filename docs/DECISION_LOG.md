@@ -128,3 +128,26 @@ Record every significant engineering decision here.
 **Consequences:** True adaptive interviewing experience that challenges candidates at their exact frontier of knowledge.
 **Related files and tests:** `src/lib/adaptive/engine.ts`, `src/lib/validations/interview.ts`, `src/app/interview/actions.ts`, `src/app/interview/[id]/page.tsx`, `src/app/interview/[id]/InterviewWorkspace.tsx`.
 
+---
+
+**Decision ID:** 008
+**Date:** 2026-10-14
+**Status:** Accepted
+
+**Problem:** How do we introduce voice interaction (speech-to-text dictation and text-to-speech AI articulation) while preserving the platform's core pillars of ₹0 API cost, 100% on-device privacy, zero audio cloud uploads, and zero third-party bundle weight?
+**Context:** Technical interviews require verbal communication of assumptions, edge cases, and architectural trade-offs. Using cloud speech services (Whisper API, ElevenLabs, Deepgram) incurs recurring fees, requires network data transmission of candidate voices, and introduces cloud dependency.
+**Options considered:**
+1. Cloud STT/TTS via third-party APIs (OpenAI Whisper / ElevenLabs) (Rejected: Violates the offline-first, local privacy, and ₹0 cost requirements).
+2. Heavy local WASM speech packages (Transformers.js / Whisper.wasm) (Rejected: Multi-megabyte bundle bloat and heavy client memory/CPU overhead).
+3. Browser-native Web Speech API (`webkitSpeechRecognition` & `window.speechSynthesis`) wrapped with React 19 `useSyncExternalStore` (Chosen).
+**Chosen decision:** **Native Web Speech API with `useSyncExternalStore` subscriptions and markdown speech sanitization.**
+**Reasoning and evidence:**
+- Zero bundle size: utilizes the operating system and browser's built-in neural speech synthesis and acoustic recognition models.
+- Absolute privacy: no audio is sent to our servers or third-party cloud APIs.
+- React 19 compliance: using `useSyncExternalStore` avoids cascading re-renders from synchronous `setState` in effects and guarantees safe SSR hydration.
+- Natural speech output: preprocessing text to strip code blocks, formatting asterisks, and backticks prevents synthetic voices from reading out punctuation.
+**Tradeoffs:** Speech recognition availability depends on browser support (supported in Google Chrome, Microsoft Edge, Brave, Safari; limited in Firefox). Handled gracefully with capability checks and polite fallback notifications.
+**Consequences:** High-fidelity hands-free mock interview experience with spoken questions and voice thought dictation at zero cost.
+**Related files and tests:** `src/hooks/useWebSpeech.ts`, `src/app/interview/[id]/InterviewWorkspace.tsx`.
+
+

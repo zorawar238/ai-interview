@@ -37,3 +37,9 @@ This document tracks the core concepts we will learn while building this platfor
 - [x] **Mathematical Performance Thresholds:** Implementing discrete escalation ($\ge 80\%$), scaffolding ($< 60\%$), and lateral domain rotation ($60–79\%$).
 - [x] **Fault-Tolerant AI Workflows:** Preventing application deadlocks with deterministic fallback generators when local models experience latency or transient failures.
 
+## Phase 9: In-Browser Web Speech & Multimodal Voice Interfaces
+- [x] **Native Browser Speech APIs:** Leveraging `window.SpeechRecognition` / `webkitSpeechRecognition` for zero-cloud acoustic transcription and `window.speechSynthesis` for vocal articulation.
+- [x] **React 19 External Store Synchronization:** Utilizing `useSyncExternalStore` to read non-React platform APIs (speech recognition availability, dynamic voice lists) without triggering cascading renders or hydration mismatch.
+- [x] **Audio Content Sanitization:** Preprocessing markdown AST and code blocks into speech-friendly natural prose.
+
+

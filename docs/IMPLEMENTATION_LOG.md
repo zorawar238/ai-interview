@@ -361,5 +361,36 @@ Build a multi-turn adaptive interview difficulty engine that dynamically analyze
    - Completed report displays a multi-phase calibration trajectory card detailing the difficulty adjustments, scores, and AI rationale across each phase.
 
 **Next Steps:**
-Proceed to Milestone 11: Web Speech Hands-Free Audio Interview Mode or Exportable Performance PDF Reports.
+Proceed to Milestone 11: Web Speech Hands-Free Audio Interview Mode.
+
+---
+
+## Milestone 11: Web Speech Hands-Free Audio Interview Mode (SpeechRecognition & SpeechSynthesis)
+**Date:** 2026-10-14
+
+**Task Objective:**
+Transform the technical interview workspace into an interactive audio experience utilizing the browser's native Web Speech API (`SpeechRecognition` & `SpeechSynthesis`). Candidates can dictate thought processes and code explanations hands-free into their architecture notes and interviewer chat, while the AI interviewer can speak questions, hints, and dialogue aloud.
+
+**Files Created / Modified:**
+- `src/hooks/useWebSpeech.ts` (Zero-dependency, React 19 compiler-compliant custom hook leveraging `useSyncExternalStore` for external speech stores, continuous recognition, and sanitized speech synthesis)
+- `src/app/interview/[id]/InterviewWorkspace.tsx` (Integrated "🔊 Listen / Read Aloud" question button, "🎙️ Dictate Thoughts" in Architecture Notes with active pulse recording indicators, "🎙️" dictation button in chat drawer, and per-message read-aloud buttons with Auto-Voice toggle)
+
+**What was implemented:**
+1. **Zero-Dependency In-Browser Voice Engine (`useWebSpeech`)**:
+   - **SpeechRecognition / webkitSpeechRecognition**: In-browser speech-to-text dictation with continuous transcript streaming and error recovery (detects mic permissions, silence pauses).
+   - **SpeechSynthesis**: In-browser text-to-speech with markdown code block sanitization (strips fenced code and formatting artifacts so synthetic speech reads clean and naturally).
+   - **React 19 & Compiler Optimization**: Replaced synchronous `setState()` in effects with `useSyncExternalStore` for browser API availability detection and dynamic voice list subscriptions, eliminating cascading re-renders and hydration mismatch.
+2. **Audio Interviewer Problem Articulation**:
+   - In the top info bar, candidates can click `🔊 Listen` to hear the AI Interviewer verbally read the problem scenario, difficulty tier, and constraints aloud.
+   - Includes real-time stop/cancel controls and active audio pulse animations.
+3. **Hands-Free Architecture Thought Dictation**:
+   - In the "Architecture & Trade-offs" tab, candidates can click `🎙️ Dictate Thoughts` to speak their algorithmic design, Big-O trade-offs, and boundary handling aloud.
+   - Transcribed words are streamed directly into the explanation textarea alongside visual microphone status banners.
+4. **Interactive Conversational Audio Dialogue**:
+   - In the AI Interviewer chat drawer, candidates can dictate questions via microphone.
+   - Candidates can toggle `🔊 Auto-Voice` to have streamed interviewer responses spoken aloud automatically, or click `🔊 Listen` on individual assistant messages.
+
+**Next Steps:**
+Proceed to Milestone 12: Exportable Candidate Performance Report (Printable PDF View & Clean Markdown Download) or Next.js 16 Middleware Modernization.
+
 
