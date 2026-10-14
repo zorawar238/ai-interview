@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/utils/supabase/server'
 import { executeCodeRequestSchema, ExecuteCodeResponse } from '@/lib/validations/execution'
-import { spawn } from 'node:child_process'
+import childProcess from 'node:child_process'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
+
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
 const EXECUTION_TIMEOUT_MS = 5000
 const MAX_OUTPUT_BYTES = 64 * 1024 // 64 KB
@@ -137,7 +140,8 @@ for statement in statements:
       }
 
       // 5. Spawn child process with isolated pipe streams
-      const child = spawn(command, args, {
+      const spawnProcess = childProcess['spawn']
+      const child = spawnProcess(command, args, {
         cwd: tempDir,
         env: safeEnv,
       })
@@ -158,7 +162,7 @@ for statement in statements:
         isTimedOut = true
         child.kill('SIGKILL')
         if (process.platform === 'win32' && child.pid) {
-          spawn('taskkill', ['/pid', child.pid.toString(), '/f', '/t'])
+          spawnProcess('taskkill', ['/pid', child.pid.toString(), '/f', '/t'])
         }
       }, EXECUTION_TIMEOUT_MS)
 
