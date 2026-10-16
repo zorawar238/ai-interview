@@ -11,6 +11,7 @@ An adaptive, interactive technical interview preparation platform built with Nex
 - **Database & Auth**: PostgreSQL on Supabase with Row-Level Security (RLS) & `@supabase/ssr`
 - **AI Inference**: Local Ollama via `@ai-sdk/openai` compatibility layer (₹0 cost, 100% private)
 - **Validation**: Zod (Structured LLM output validation via `generateObject`)
+- **Testing**: Vitest with native ESM and zero-fluff assertion suites
 
 ---
 
@@ -24,6 +25,7 @@ Comprehensive documentation is maintained in [`docs/`](./docs):
 - **[docs/DECISION_LOG.md](./docs/DECISION_LOG.md)**: Architectural Decision Records (ADRs) with rationale and tradeoffs.
 - **[docs/LEARNING_ROADMAP.md](./docs/LEARNING_ROADMAP.md)**: Core computer science and web engineering skills roadmap.
 - **[docs/IMPLEMENTATION_LOG.md](./docs/IMPLEMENTATION_LOG.md)**: Changelog of implemented milestones.
+- **[docs/TESTING_STRATEGY.md](./docs/TESTING_STRATEGY.md)**: Testing architecture, deterministic vs non-deterministic testing, and coverage.
 - **[docs/INTERVIEW_PREPARATION.md](./docs/INTERVIEW_PREPARATION.md)**: Comprehensive technical interview Q&A guide explaining the system's architecture, database design, and AI integrations.
 
 ---
@@ -60,3 +62,12 @@ npm run dev
 ```
 
 Visit [http://localhost:3000](http://localhost:3000) to test the application.
+
+### 5. Run Automated Tests
+
+Execute the Vitest regression test suite:
+
+```bash
+npm test
+```
+

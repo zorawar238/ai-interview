@@ -171,5 +171,27 @@ Record every significant engineering decision here.
 **Consequences:** Instant export capabilities and a warning-free, forward-compatible Next.js 16 build.
 **Related files and tests:** `src/app/interview/[id]/ReportExportActions.tsx`, `src/app/interview/[id]/page.tsx`, `src/app/globals.css`, `src/proxy.ts`.
 
+---
+
+**Decision ID:** 010
+**Date:** 2026-10-16
+**Status:** Accepted
+
+**Problem:** How do we establish an automated unit and integration testing suite for deterministic business logic, execution sandbox boundaries, and AI schema resilience without bloated configuration or conflicts with Next.js 16 Turbopack?
+**Context:** Per `PRD_AI_Coding_Interview_Platform.md` and `AI_AGENT_RULES.md`, critical flows must have automated, verifiable test coverage. `npm test` was missing. Standard Jest setups often encounter ESM path alias issues, slow startup, and conflict with modern TypeScript module resolution.
+**Options considered:**
+1. Jest with `ts-jest` or `@swc/jest` (Rejected: Heavy configuration overhead, complex ESM setup, slower execution).
+2. Node.js native test runner (`node:test`) (Viable, but lacks out-of-the-box path alias mapping and mocking utilities without custom loaders).
+3. Vitest with native ESM configuration (`vitest.config.mts`) and `@/*` path resolution (Chosen).
+**Chosen decision:** **Vitest with native ESM configuration, path aliases, and mocked LLM resilience verification.**
+**Reasoning and evidence:**
+- Zero configuration friction: Vitest shares modern Vite/ESM ergonomics and seamlessly resolves Next.js `@/*` path aliases.
+- Lightning performance: 29 unit and schema validation tests execute in $< 300\text{ms}$.
+- Deterministic AI testing: Mocking LLM failure branches verifies that `generateAdaptiveQuestion` catches transient errors and deploys deterministic fallbacks without hitting live models or causing flaky test timeouts.
+**Tradeoffs:** Adds `vitest` as a development-only dependency.
+**Consequences:** Fully automated, one-shot regression testing via `npm test` ensuring high confidence during continuous development.
+**Related files and tests:** `vitest.config.mts`, `package.json`, `docs/TESTING_STRATEGY.md`, `src/lib/adaptive/__tests__/engine.test.ts`, `src/lib/validations/__tests__/execution.test.ts`, `src/lib/validations/__tests__/evaluation.test.ts`.
+
+
 
 

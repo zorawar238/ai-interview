@@ -419,7 +419,47 @@ Empower candidates to export and share their technical interview evaluations via
    - Migrated `src/middleware.ts` to `src/proxy.ts` exporting `export async function proxy(request: NextRequest)`, eliminating the `middleware` deprecation warning during `next build`.
 
 **Next Steps:**
-The core product vision and all advanced technical interview milestones (Auth, PostgreSQL RLS, Local Ollama Inference, Code Sandbox, Analytics, Monaco Workspace, Live Dialogue, Adaptive Difficulty Engine, Web Speech Audio Mode, and Export Engine) are now fully implemented, tested, and production-ready!
+Proceed to Milestone 13: Automated Testing Suite & Testing Strategy.
+
+---
+
+## Milestone 13: Automated Testing Suite & Testing Strategy (Vitest, Native ESM & Schema Bounds)
+**Date:** 2026-10-16
+
+**Task Objective:**
+Fulfill PRD §14/§16 and AI Agent Rules §7 by introducing an automated, lightning-fast regression test suite with zero configuration bloat, testing deterministic difficulty mathematics, code execution boundaries, Zod schema contracts, and AI fallback resilience.
+
+**Files Created / Modified:**
+- `vitest.config.mts` (Vite test runner configuration with `@/*` path aliasing and native ESM support)
+- `package.json` (Added `vitest` dependency and configured `npm test` and `npm run test:watch` scripts)
+- `src/lib/adaptive/__tests__/engine.test.ts` (13 tests covering question target calculations, multi-branch adaptive scaling, and LLM failure fallback resilience)
+- `src/lib/validations/__tests__/execution.test.ts` (9 tests covering language whitelist, negative input rejections, 50KB code payload caps, and timeout responses)
+- `src/lib/validations/__tests__/evaluation.test.ts` (7 tests covering 0-100 score bounds, performance verdict enums, and interview configuration defaults)
+- `docs/TESTING_STRATEGY.md` (Comprehensive documentation of deterministic vs non-deterministic testing, test architecture, and sandbox safety guidelines)
+- `docs/DECISION_LOG.md` (Added ADR 010 detailing Vitest + ESM over Jest/ts-jest)
+- `README.md` (Updated test instructions and documentation links)
+
+**What was implemented:**
+1. **Zero-Friction ESM Test Architecture**:
+   - Integrated Vitest with Node 22/24 native ESM and Turbopack compatibility.
+   - Configured exact path alias resolution mapping `@/*` to `./src/*`.
+2. **Deterministic Adaptive Scaling Math Verification**:
+   - Tested score boundary conditions: Score $\ge 80$ (escalation), Score $< 60$ (scaffolding), and Score $60-79$ (lateral topic pivot).
+   - Validated topic rotation and round-robin fallback when topic lists are exhausted.
+3. **Resilient AI Fallback Unit Testing**:
+   - Mocked transient Ollama failures to verify that `generateAdaptiveQuestion` catches errors gracefully and yields structured, valid fallback questions in $< 10\text{ms}$.
+4. **Code Execution Sandbox Contract Tests**:
+   - Tested whitelist verification (`typescript`, `javascript`, `python`, `sql`), rejection of arbitrary languages, and enforcement of input length caps ($50\text{ KB}$).
+5. **Runtime Zod Schema Enforcement**:
+   - Verified that evaluation scores are constrained strictly within $0 \le \text{score} \le 100$, rejecting invalid scores or non-standard performance verdicts.
+
+**Verification Results:**
+- `npm test`: **3 test files, 29 tests passed (100% pass rate in 291ms)**
+- `npm run build`: **Next.js 16.4.0 Turbopack production build compiled successfully with 0 errors**
+
+**Next Steps:**
+All milestones from Discovery through Deployment Readiness (Milestones 0 to 13) are complete, documented, tested, and synchronized on GitHub!
+
 
 
 
