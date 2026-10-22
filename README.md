@@ -22,11 +22,18 @@ Comprehensive documentation is maintained in [`docs/`](./docs):
 - **[docs/PROJECT_VISION.md](./docs/PROJECT_VISION.md)**: Product goals, principles, and target personas.
 - **[docs/SYSTEM_ARCHITECTURE.md](./docs/SYSTEM_ARCHITECTURE.md)**: System design and end-to-end data flow.
 - **[docs/DATABASE_DESIGN.md](./docs/DATABASE_DESIGN.md)**: Entity Relationship Diagram (ERD), schema definitions, and RLS policies.
+- **[docs/API_SPECIFICATION.md](./docs/API_SPECIFICATION.md)**: REST and SSE endpoint documentation with request/response schemas.
+- **[docs/AI_ENGINEERING.md](./docs/AI_ENGINEERING.md)**: LLM integration, prompt design, structured output validation, and fallback resilience.
 - **[docs/DECISION_LOG.md](./docs/DECISION_LOG.md)**: Architectural Decision Records (ADRs) with rationale and tradeoffs.
 - **[docs/LEARNING_ROADMAP.md](./docs/LEARNING_ROADMAP.md)**: Core computer science and web engineering skills roadmap.
 - **[docs/IMPLEMENTATION_LOG.md](./docs/IMPLEMENTATION_LOG.md)**: Changelog of implemented milestones.
 - **[docs/TESTING_STRATEGY.md](./docs/TESTING_STRATEGY.md)**: Testing architecture, deterministic vs non-deterministic testing, and coverage.
-- **[docs/INTERVIEW_PREPARATION.md](./docs/INTERVIEW_PREPARATION.md)**: Comprehensive technical interview Q&A guide explaining the system's architecture, database design, and AI integrations.
+- **[docs/SECURITY.md](./docs/SECURITY.md)**: Security boundaries, environment sanitization, and RLS audit.
+- **[docs/KNOWN_LIMITATIONS.md](./docs/KNOWN_LIMITATIONS.md)**: Explicit assessment of sandbox boundaries, browser compatibility, and local LLM scale.
+- **[docs/DEBUGGING_LOG.md](./docs/DEBUGGING_LOG.md)**: Verified engineering resolutions for real-world issues encountered.
+- **[docs/INTERVIEW_PREPARATION.md](./docs/INTERVIEW_PREPARATION.md)**: Technical interview Q&A guide explaining the system's design and code.
+- **[docs/GLOSSARY.md](./docs/GLOSSARY.md)**: Definitions of core domain and architectural terms.
+- **[docs/RELEASE_NOTES.md](./docs/RELEASE_NOTES.md)**: Official v1.0.0 release notes and feature highlights.
 
 ---
 
