@@ -124,18 +124,44 @@ export default async function HomePage() {
             <div className="pt-10 max-w-4xl mx-auto text-left">
               <div className="rounded-2xl border border-zinc-800 bg-zinc-900/90 shadow-2xl overflow-hidden backdrop-blur-xl">
                 {/* Terminal Header */}
-                <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80 bg-zinc-950/60">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800/80 bg-zinc-950/80">
                   <div className="flex items-center gap-2">
                     <span className="w-3 h-3 rounded-full bg-red-500/80 inline-block" />
                     <span className="w-3 h-3 rounded-full bg-amber-500/80 inline-block" />
                     <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block" />
                     <span className="ml-2 text-xs font-mono text-zinc-400">
-                      interview-session :: llama3.2-gpu
+                      interview-workspace :: typescript-v5 :: llama3.2-adaptive
                     </span>
                   </div>
-                  <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60">
-                    Live Simulator Preview
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Sandbox Active
+                    </span>
+                    <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 hidden sm:inline-block">
+                      Live Workspace Preview
+                    </span>
+                  </div>
+                </div>
+
+                {/* Workspace Action Bar */}
+                <div className="flex items-center justify-between px-4 py-2 bg-zinc-950/40 border-b border-zinc-800/60 text-xs font-mono">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-1 rounded bg-zinc-800/80 text-white font-medium flex items-center gap-1.5">
+                      <span>💻</span> solution.ts
+                    </span>
+                    <span className="px-2.5 py-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors flex items-center gap-1.5 cursor-pointer">
+                      <span>🎙️</span> Architecture Notes
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-2 py-0.5 rounded bg-zinc-800 text-indigo-300 border border-zinc-700/60 text-[11px] flex items-center gap-1">
+                      <span>🔊</span> Read Aloud
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-indigo-600/30 text-indigo-200 border border-indigo-500/40 text-[11px] flex items-center gap-1">
+                      <span>💬</span> AI Interviewer
+                    </span>
+                  </div>
                 </div>
 
                 {/* Simulated Interview Interaction */}
@@ -144,38 +170,72 @@ export default async function HomePage() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-3">
                       <span className="text-xs font-semibold px-2.5 py-0.5 rounded bg-zinc-800 text-indigo-300 font-mono">
-                        Question 1 • PostgreSQL & SQL
+                        Question 1 • Algorithms & Data Structures
                       </span>
-                      <span className="text-xs text-zinc-500 font-mono">Difficulty: Hard</span>
+                      <span className="text-xs px-2 py-0.5 rounded bg-amber-950/80 text-amber-300 border border-amber-800/60 font-mono">
+                        Difficulty: Medium
+                      </span>
                     </div>
                     <p className="text-sm sm:text-base font-medium text-zinc-200 leading-relaxed">
-                      &ldquo;In PostgreSQL, why are foreign key columns not automatically indexed, and what exact performance and locking penalties occur during an ON DELETE CASCADE operation without an index?&rdquo;
+                      &ldquo;Implement an LRU Cache with $O(1)$ average time complexity for both <code className="text-indigo-300 font-mono">get(key)</code> and <code className="text-indigo-300 font-mono">put(key, value)</code> operations. Explain memory bounds and eviction policies.&rdquo;
                     </p>
                   </div>
 
-                  {/* Candidate Answer Box */}
-                  <div className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800/80 space-y-2">
-                    <span className="text-[11px] font-mono uppercase tracking-wider text-zinc-500">
-                      Candidate Solution
-                    </span>
-                    <p className="text-xs sm:text-sm font-mono text-zinc-300 leading-relaxed">
-                      Postgres automatically indexes primary keys with unique B-trees, but not foreign keys. Without an index on the referencing table, every DELETE on the parent forces a full Sequential Scan on the child table while acquiring ShareRowExclusiveLock, stalling concurrent transactions.
-                    </p>
+                  {/* Monaco Code Snippet */}
+                  <div className="rounded-xl bg-zinc-950/90 border border-zinc-800/80 p-4 font-mono text-xs text-zinc-300 space-y-1 overflow-x-auto">
+                    <div className="text-zinc-500">// TypeScript Solution with Doubly-Linked List & Hash Map</div>
+                    <div><span className="text-purple-400">class</span> <span className="text-yellow-300">LRUCache</span> {'{'}</div>
+                    <div className="pl-4"><span className="text-purple-400">private</span> capacity: <span className="text-blue-400">number</span>;</div>
+                    <div className="pl-4"><span className="text-purple-400">private</span> map = <span className="text-purple-400">new</span> <span className="text-yellow-300">Map</span>&lt;<span className="text-blue-400">number</span>, <span className="text-yellow-300">Node</span>&gt;();</div>
+                    <div className="pl-4"><span className="text-blue-400">get</span>(key: <span className="text-blue-400">number</span>): <span className="text-blue-400">number</span> {'{'} <span className="text-zinc-500">/* O(1) node elevation */</span> {'}'}</div>
+                    <div>{'}'}</div>
+                  </div>
+
+                  {/* Sandbox Run Output */}
+                  <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-400 flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-400 font-semibold">▶ Run Code</span>
+                      <span className="text-zinc-600">|</span>
+                      <span className="text-zinc-300">All 4 test cases passed</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-[11px] text-zinc-500">
+                      <span>Execution Time: <span className="text-zinc-300">38ms</span></span>
+                      <span>Exit Code: <span className="text-emerald-400 font-bold">0</span></span>
+                    </div>
+                  </div>
+
+                  {/* Candidate Speech Dictation Bubble */}
+                  <div className="p-3.5 rounded-xl bg-zinc-900/90 border border-zinc-800 flex items-start gap-3">
+                    <span className="text-base">🎙️</span>
+                    <div className="text-xs space-y-1">
+                      <div className="font-semibold text-zinc-300 flex items-center gap-2">
+                        <span>Dictated Architectural Reasoning</span>
+                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-950 text-indigo-300 font-mono">Web Speech STT</span>
+                      </div>
+                      <p className="text-zinc-400 leading-relaxed">
+                        &ldquo;I used a doubly linked list coupled with a hash map so we can remove and insert nodes at the head in $O(1)$ time without shifting arrays.&rdquo;
+                      </p>
+                    </div>
                   </div>
 
                   {/* AI Evaluator Output */}
                   <div className="p-4 sm:p-5 rounded-xl bg-indigo-950/30 border border-indigo-900/60 space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
                         <span className="w-2 h-2 rounded-full bg-indigo-400" />
                         Automated AI Rubric Assessment
                       </span>
-                      <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60">
-                        Score: 94 / 100 • Exceptional
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+                          Score: 95 / 100 • Exceptional
+                        </span>
+                        <span className="text-xs font-mono px-2 py-0.5 rounded bg-indigo-900/80 text-indigo-200 border border-indigo-700/60">
+                          ⚡ Level Up → Hard
+                        </span>
+                      </div>
                     </div>
                     <p className="text-xs sm:text-sm text-zinc-300 leading-relaxed">
-                      &ldquo;Exceptional explanation. Accurately identified both the sequential table scan penalty and table locking ramifications on high-concurrency production databases.&rdquo;
+                      &ldquo;Exceptional solution. Correctly identified both the hash map lookup and doubly-linked list node elevation trade-offs with defensive capacity bounds.&rdquo;
                     </p>
                   </div>
                 </div>
@@ -207,62 +267,95 @@ export default async function HomePage() {
                 </div>
                 <h3 className="text-lg font-semibold text-white">Local Ollama AI Inference</h3>
                 <p className="text-sm text-zinc-400 leading-relaxed">
-                  Run powerful open-weight LLMs (like Llama 3.2) locally with GPU acceleration. Enjoy ₹0 cost, zero API quotas, and total code privacy.
+                  Run powerful open-weight LLMs (like Llama 3.2) locally with GPU acceleration. Enjoy ₹0 cost, zero API quotas, deterministic fallback, and total code privacy.
                 </p>
               </div>
 
-              {/* Feature 2 */}
+              {/* Feature 2: Monaco Editor & Sandbox */}
+              <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-emerald-400 text-lg">
+                  💻
+                </div>
+                <h3 className="text-lg font-semibold text-white">Monaco Editor & Isolated Sandbox</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Write code with VS Code keybindings and run TypeScript, Python 3, and SQLite directly in a process-isolated sandbox with strict 5s timeouts.
+                </p>
+              </div>
+
+              {/* Feature 3: Web Speech Voice Engine */}
               <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
                 <div className="w-10 h-10 rounded-xl bg-purple-950/80 border border-purple-800/60 flex items-center justify-center text-purple-400 text-lg">
+                  🎙️
+                </div>
+                <h3 className="text-lg font-semibold text-white">Multimodal Voice Engine</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Dictate architectural thoughts hands-free via in-browser Web Speech recognition, and listen to the AI interviewer articulate problems aloud via speech synthesis.
+                </p>
+              </div>
+
+              {/* Feature 4: Socratic AI Streaming */}
+              <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-950/80 border border-blue-800/60 flex items-center justify-center text-blue-400 text-lg">
+                  💬
+                </div>
+                <h3 className="text-lg font-semibold text-white">Live Socratic AI Dialogue</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Chat with an AI Principal Engineer who streams real-time progressive hints, probes your assumptions, and guides you without giving away solutions.
+                </p>
+              </div>
+
+              {/* Feature 5: Adaptive Calibration */}
+              <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-950/80 border border-amber-800/60 flex items-center justify-center text-amber-400 text-lg">
+                  📈
+                </div>
+                <h3 className="text-lg font-semibold text-white">Adaptive Difficulty Engine</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Dynamic multi-turn difficulty adjustments: scores &ge; 80% level up to harder challenges, while &lt; 60% deploys targeted scaffolding to test fundamentals.
+                </p>
+              </div>
+
+              {/* Feature 6: Report Export & PDF */}
+              <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-950/80 border border-rose-800/60 flex items-center justify-center text-rose-400 text-lg">
+                  📊
+                </div>
+                <h3 className="text-lg font-semibold text-white">Analytics Dashboard & PDF Export</h3>
+                <p className="text-sm text-zinc-400 leading-relaxed">
+                  Inspect mathematical SVG performance trendlines, topic mastery matrices, download complete Markdown summaries, or print ink-friendly PDFs.
+                </p>
+              </div>
+
+              {/* Feature 7: Postgres RLS */}
+              <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-cyan-950/80 border border-cyan-800/60 flex items-center justify-center text-cyan-400 text-lg">
                   🛡️
                 </div>
                 <h3 className="text-lg font-semibold text-white">PostgreSQL Row-Level Security</h3>
                 <p className="text-sm text-zinc-400 leading-relaxed">
-                  Every interview session, question, answer, and evaluation is isolated using Postgres RLS policies evaluated directly at the database kernel.
+                  Every interview session, question, answer, and evaluation is isolated using Postgres RLS policies evaluated directly at the database engine.
                 </p>
               </div>
 
-              {/* Feature 3 */}
+              {/* Feature 8: Zod Schema Validation */}
               <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-950/80 border border-emerald-800/60 flex items-center justify-center text-emerald-400 text-lg">
+                <div className="w-10 h-10 rounded-xl bg-violet-950/80 border border-violet-800/60 flex items-center justify-center text-violet-400 text-lg">
                   🎯
                 </div>
                 <h3 className="text-lg font-semibold text-white">Zod Schema Validation</h3>
                 <p className="text-sm text-zinc-400 leading-relaxed">
-                  No hallucinated formatting. Questions, rubrics, and feedback are strictly validated via Zod and Vercel AI SDK structured generation.
+                  Zero hallucinated formatting. Questions, hints, rubrics, and feedback are strictly validated via Zod schemas and Vercel AI SDK structured generation.
                 </p>
               </div>
 
-              {/* Feature 4 */}
+              {/* Feature 9: Automated Regression Tests */}
               <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-950/80 border border-blue-800/60 flex items-center justify-center text-blue-400 text-lg">
-                  📊
+                <div className="w-10 h-10 rounded-xl bg-orange-950/80 border border-orange-800/60 flex items-center justify-center text-orange-400 text-lg">
+                  🧪
                 </div>
-                <h3 className="text-lg font-semibold text-white">Actionable Feedback Reports</h3>
+                <h3 className="text-lg font-semibold text-white">Automated Regression Suite</h3>
                 <p className="text-sm text-zinc-400 leading-relaxed">
-                  Receive concrete technical feedback with bulleted Key Strengths and Areas to Improve rather than vague encouragement.
-                </p>
-              </div>
-
-              {/* Feature 5 */}
-              <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-950/80 border border-amber-800/60 flex items-center justify-center text-amber-400 text-lg">
-                  🧩
-                </div>
-                <h3 className="text-lg font-semibold text-white">Role & Topic Tailoring</h3>
-                <p className="text-sm text-zinc-400 leading-relaxed">
-                  Practice tailored challenges for Frontend, Backend, Full-Stack, and DevOps spanning React, Node.js, SQL, System Design, and Algorithms.
-                </p>
-              </div>
-
-              {/* Feature 6 */}
-              <div className="p-6 rounded-2xl bg-zinc-900/50 border border-zinc-800/80 hover:border-zinc-700 transition-all space-y-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-950/80 border border-rose-800/60 flex items-center justify-center text-rose-400 text-lg">
-                  🔄
-                </div>
-                <h3 className="text-lg font-semibold text-white">Session Durability</h3>
-                <p className="text-sm text-zinc-400 leading-relaxed">
-                  State transitions (`created` → `in_progress` → `completed`) are persisted in the database. Refreshes and network drops never wipe your work.
+                  Guaranteed reliability with 31 automated Vitest tests covering adaptive mathematics, sandbox boundary caps, and runtime schema validation.
                 </p>
               </div>
             </div>
