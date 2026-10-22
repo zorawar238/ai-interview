@@ -86,7 +86,7 @@ export function calculateAdaptiveStep(params: {
 /**
  * Deterministic fallback questions in case local Ollama is offline or experiences transient errors.
  */
-function getDeterministicFallbackQuestion(params: {
+export function getDeterministicFallbackQuestion(params: {
   topic: string
   difficulty: DifficultyLevel
   role: string
@@ -106,6 +106,41 @@ function getDeterministicFallbackQuestion(params: {
       `Analyze the time vs space trade-off of using additional memory (e.g. hash map).`,
     ],
     adaptationRationale: rationale,
+  }
+}
+
+/**
+ * Generates the first baseline question with automatic deterministic fallback resilience.
+ */
+export async function generateBaselineQuestion(params: {
+  role: string
+  experienceLevel: string
+  topic: string
+  difficulty: DifficultyLevel
+}): Promise<SingleQuestion> {
+  const { role, experienceLevel, topic, difficulty } = params
+
+  try {
+    const result = await generateObject({
+      model: ollama.chat('llama3.2'),
+      schema: singleQuestionSchema,
+      prompt: `You are an expert technical interviewer conducting an adaptive interview for a ${experienceLevel} level ${role} role.
+      Generate the first baseline question to assess core technical competency.
+      Topic: ${topic}.
+      Difficulty level: ${difficulty}.
+      Ensure the question tests practical problem-solving and architectural judgment.
+      Include 2-3 progressive hints and evaluation rubric.`,
+    })
+
+    return result.object
+  } catch (error) {
+    console.warn('Ollama baseline generation encountered an issue, deploying deterministic fallback:', error)
+    return getDeterministicFallbackQuestion({
+      topic,
+      difficulty,
+      role,
+      rationale: `Baseline question in ${topic} to establish candidate competency.`,
+    })
   }
 }
 

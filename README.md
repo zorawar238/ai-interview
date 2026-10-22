@@ -78,3 +78,16 @@ Execute the Vitest regression test suite:
 npm test
 ```
 
+### 6. Containerized Deployment (Docker)
+
+To launch the complete stack (Next.js Application + Local Ollama service) in Docker:
+
+```bash
+docker compose up -d
+```
+Pull the model inside the Ollama container:
+```bash
+docker compose exec ollama ollama pull llama3.2
+```
+Access the application at [http://localhost:3000](http://localhost:3000).
+

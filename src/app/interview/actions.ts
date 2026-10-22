@@ -8,11 +8,14 @@ import {
   createInterviewSchema,
   generatedQuestionsSchema,
   singleQuestionSchema,
+  SingleQuestion,
 } from '@/lib/validations/interview'
 import { evaluationSchema, EvaluationResult } from '@/lib/validations/evaluation'
 import {
   getTargetQuestionCount,
   generateAdaptiveQuestion,
+  generateBaselineQuestion,
+  getDeterministicFallbackQuestion,
   DifficultyLevel,
 } from '@/lib/adaptive/engine'
 
@@ -77,22 +80,16 @@ export async function createInterviewAction(formData: FormData) {
 
     interviewId = interview.id
 
-    // 3. Generate initial question(s) using local Ollama model
+    // 3. Generate initial question(s) using local Ollama model with deterministic fallback resilience
     if (interviewMode === 'adaptive') {
-      // In adaptive mode, we generate the first baseline question immediately
+      // In adaptive mode, we generate the first baseline question with automatic fallback protection
       const initialTopic = topics[0] || 'General Engineering'
-      const result = await generateObject({
-        model: ollama.chat('llama3.2'),
-        schema: singleQuestionSchema,
-        prompt: `You are an expert technical interviewer conducting an adaptive interview for a ${experienceLevel} level ${role} role.
-        Generate the first baseline question to assess core technical competency.
-        Topic: ${initialTopic}.
-        Difficulty level: ${difficulty}.
-        Ensure the question tests practical problem-solving and architectural judgment.
-        Include 2-3 progressive hints and evaluation rubric.`,
+      const q = await generateBaselineQuestion({
+        role,
+        experienceLevel,
+        topic: initialTopic,
+        difficulty: difficulty as DifficultyLevel,
       })
-
-      const q = result.object
 
       const { error: questionError } = await supabase.from('questions').insert({
         interview_id: interviewId,
@@ -109,7 +106,7 @@ export async function createInterviewAction(formData: FormData) {
           adaptiveContext: {
             adaptationType: 'baseline',
             targetDifficulty: difficulty,
-            rationale: `Baseline question in ${initialTopic} to establish candidate competency.`,
+            rationale: q.adaptationRationale || `Baseline question in ${initialTopic} to establish candidate competency.`,
           },
         }),
       })
@@ -119,17 +116,32 @@ export async function createInterviewAction(formData: FormData) {
         throw new Error('Failed to save baseline question to database')
       }
     } else {
-      // Static fixed difficulty mode: generate all 3 questions upfront
-      const result = await generateObject({
-        model: ollama.chat('llama3.2'),
-        schema: generatedQuestionsSchema,
-        prompt: `You are an expert technical interviewer conducting an interview for a ${experienceLevel} level ${role} role.
-        Create 3 realistic, focused interview questions covering: ${topics.join(', ')}.
-        Difficulty level: ${difficulty}.
-        Make sure questions test practical understanding and problem solving rather than simple trivia.`,
-      })
+      // Static fixed difficulty mode: generate all questions upfront with fallback protection
+      let questions: SingleQuestion[] = []
 
-      const questions = result.object.questions
+      try {
+        const result = await generateObject({
+          model: ollama.chat('llama3.2'),
+          schema: generatedQuestionsSchema,
+          prompt: `You are an expert technical interviewer conducting an interview for a ${experienceLevel} level ${role} role.
+          Create 3 realistic, focused interview questions covering: ${topics.join(', ')}.
+          Difficulty level: ${difficulty}.
+          Make sure questions test practical understanding and problem solving rather than simple trivia.`,
+        })
+        questions = result.object.questions
+      } catch (err) {
+        console.warn('Ollama static questions batch generation failed, deploying fallbacks:', err)
+        const sampleTopics = topics.length > 0 ? topics : ['Data Structures', 'System Architecture', 'Algorithms']
+        questions = sampleTopics.slice(0, 3).map((top, idx) =>
+          getDeterministicFallbackQuestion({
+            topic: top,
+            difficulty: difficulty as DifficultyLevel,
+            role,
+            rationale: `Static difficulty question #${idx + 1} in ${top}.`,
+          })
+        )
+      }
+
       const questionsToInsert = questions.map((q, idx) => ({
         interview_id: interviewId,
         type: q.type,

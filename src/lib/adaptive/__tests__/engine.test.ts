@@ -4,6 +4,8 @@ import {
   getTargetQuestionCount,
   calculateAdaptiveStep,
   generateAdaptiveQuestion,
+  generateBaselineQuestion,
+  getDeterministicFallbackQuestion,
   DifficultyLevel,
 } from '../engine'
 
@@ -179,3 +181,37 @@ describe('Adaptive Engine: generateAdaptiveQuestion fallback resilience', () => 
     expect(result.adaptiveContext.targetDifficulty).toBe('easy')
   })
 })
+
+describe('Adaptive Engine: generateBaselineQuestion & getDeterministicFallbackQuestion resilience', () => {
+  it('generates deterministic fallback question with expected structure and hints', () => {
+    const question = getDeterministicFallbackQuestion({
+      topic: 'Algorithms',
+      difficulty: 'hard',
+      role: 'Backend Architect',
+      rationale: 'Baseline evaluation test.',
+    })
+
+    expect(question.topic).toBe('Algorithms')
+    expect(question.difficulty).toBe('hard')
+    expect(question.prompt).toContain('Backend Architect')
+    expect(question.prompt).toContain('Algorithms')
+    expect(question.hints.length).toBeGreaterThanOrEqual(2)
+    expect(question.rubric).toBeDefined()
+  })
+
+  it('deploys deterministic fallback when baseline question generation fails', async () => {
+    const question = await generateBaselineQuestion({
+      role: 'Staff Systems Engineer',
+      experienceLevel: 'senior',
+      topic: 'Distributed Systems',
+      difficulty: 'hard',
+    })
+
+    expect(question).toBeDefined()
+    expect(question.topic).toBe('Distributed Systems')
+    expect(question.difficulty).toBe('hard')
+    expect(question.prompt).toContain('Staff Systems Engineer')
+    expect(question.hints.length).toBeGreaterThan(0)
+  })
+})
+
