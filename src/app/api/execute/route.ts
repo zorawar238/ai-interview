@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/utils/supabase/server'
+import { getCurrentUser } from '@/utils/auth'
 import { executeCodeRequestSchema, ExecuteCodeResponse } from '@/lib/validations/execution'
 import { spawn } from 'node:child_process'
 import * as fs from 'node:fs/promises'
@@ -14,15 +14,8 @@ const MAX_OUTPUT_BYTES = 64 * 1024 // 64 KB
 
 export async function POST(req: Request) {
   try {
-    // 1. Authenticate user
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // 1. Authenticate user (supports guest mode bypass)
+    const user = await getCurrentUser()
 
     // 2. Validate request payload
     const body = await req.json()

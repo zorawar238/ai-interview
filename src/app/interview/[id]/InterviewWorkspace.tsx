@@ -27,6 +27,9 @@ interface InterviewWorkspaceProps {
   hints: string[]
   durationMinutes: number
   role?: string
+  interviewFormat?: 'conversational' | 'coding'
+  questionType?: 'technical' | 'behavioral' | 'coding'
+  resumeText?: string | null
   adaptiveContext?: {
     adaptationType: 'baseline' | 'level_up' | 'scaffold' | 'lateral'
     previousScore?: number
@@ -194,14 +197,22 @@ export default function InterviewWorkspace({
   hints,
   durationMinutes,
   role = 'Full-Stack Engineer',
+  interviewFormat = 'conversational',
+  questionType = 'technical',
+  resumeText = null,
   adaptiveContext,
 }: InterviewWorkspaceProps) {
-  // 1. Editor State
+  const isConversationalMode = interviewFormat === 'conversational' || questionType !== 'coding'
+
+  // 1. Editor & Oral State
   const initialLanguage = topic.toLowerCase().includes('sql') ? 'sql' : 'typescript'
   const [selectedLanguage, setSelectedLanguage] = useState(initialLanguage)
   const [code, setCode] = useState(LANGUAGE_TEMPLATES[initialLanguage] || LANGUAGE_TEMPLATES.typescript)
   const [textNotes, setTextNotes] = useState('')
-  const [activeTab, setActiveTab] = useState<'code' | 'notes'>('code')
+  const [oralAnswer, setOralAnswer] = useState('')
+  const [activeTab, setActiveTab] = useState<'oral' | 'notes' | 'code'>(
+    isConversationalMode ? 'oral' : 'code'
+  )
 
   // 2. Hints State
   const [revealedHintsCount, setRevealedHintsCount] = useState(0)
@@ -217,7 +228,9 @@ export default function InterviewWorkspace({
     {
       id: 'welcome',
       role: 'assistant',
-      content: `Hello! I am your technical interviewer for this ${role} session. Feel free to ask clarifying questions about problem constraints, assumptions, or discuss architectural trade-offs as you design your solution.`,
+      content: isConversationalMode
+        ? `Hello! I am your lead technical interviewer for this oral ${role} session. This interview evaluates architectural design, system boundaries, and engineering trade-offs verbally without requiring code syntax. Feel free to discuss assumptions or ask clarifying questions!`
+        : `Hello! I am your technical interviewer for this ${role} session. Feel free to ask clarifying questions about problem constraints, assumptions, or discuss architectural trade-offs as you design your solution.`,
     },
   ])
   const [chatInput, setChatInput] = useState('')
@@ -241,6 +254,13 @@ export default function InterviewWorkspace({
   // Speech synthesis player for reading questions and assistant responses
   const speechPlayer = useWebSpeech()
 
+  // Speech-to-text dictation for Candidate Oral Answer
+  const oralSpeech = useWebSpeech({
+    onTranscript: (spokenText) => {
+      setOralAnswer((prev) => (prev ? `${prev} ${spokenText}` : spokenText))
+    },
+  })
+
   // Speech-to-text dictation for Architecture Notes
   const notesSpeech = useWebSpeech({
     onTranscript: (spokenText) => {
@@ -258,11 +278,11 @@ export default function InterviewWorkspace({
   // Cleanly stop audio on unmount
   useEffect(() => {
     return () => {
-      speechPlayer.stopSpeaking()
-      notesSpeech.stopListening()
-      chatSpeech.stopListening()
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+        window.speechSynthesis.cancel()
+      }
     }
-  }, [speechPlayer, notesSpeech, chatSpeech])
+  }, [])
 
   const handleToggleQuestionAudio = () => {
     if (speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt)) {
@@ -409,20 +429,35 @@ export default function InterviewWorkspace({
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
 
-    // Aggregate code, sandbox execution output, and architectural notes
+    // Aggregate oral response, code, sandbox execution output, and architectural notes
     let combinedAnswer = ''
-    if (code.trim()) {
-      combinedAnswer += `\`\`\`${selectedLanguage}\n${code.trim()}\n\`\`\`\n`
+    if (oralAnswer.trim()) {
+      combinedAnswer += `### Verbal / Oral Interview Response:\n${oralAnswer.trim()}\n\n`
+    }
+
+    const isDefaultBoilerplate = Object.values(LANGUAGE_TEMPLATES).some(
+      (tmpl) => tmpl.trim() === code.trim()
+    )
+
+    // In conversational mode, only include code if user deliberately edited or selected the code tab
+    if (code.trim() && (!isConversationalMode || !isDefaultBoilerplate || activeTab === 'code')) {
+      if (!isConversationalMode || !isDefaultBoilerplate) {
+        combinedAnswer += `\`\`\`${selectedLanguage}\n${code.trim()}\n\`\`\`\n`
+      }
     }
     if (executionResult?.stdout) {
       combinedAnswer += `\n### Sandbox Test Execution Output (stdout):\n\`\`\`\n${executionResult.stdout.trim()}\n\`\`\`\n`
     }
     if (textNotes.trim()) {
-      combinedAnswer += `\n### Architecture / Explanation Notes:\n${textNotes.trim()}`
+      combinedAnswer += `\n### Architecture / Discussion Notes:\n${textNotes.trim()}`
     }
 
     if (!combinedAnswer.trim()) {
-      alert('Please enter an answer or code solution before submitting.')
+      alert(
+        isConversationalMode
+          ? 'Please articulate your answer verbally (via microphone) or type your response before submitting.'
+          : 'Please enter an answer or code solution before submitting.'
+      )
       return
     }
 
@@ -445,13 +480,25 @@ export default function InterviewWorkspace({
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 sm:p-8 space-y-5 backdrop-blur-sm shadow-xl">
         {/* Top Info Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-zinc-800/80">
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-zinc-800 text-indigo-300 border border-zinc-700/60 font-mono">
               {topic}
             </span>
             <span className="text-xs uppercase text-zinc-400 font-mono tracking-wider">
               Difficulty: <strong className="text-zinc-200">{difficulty}</strong>
             </span>
+            {isConversationalMode && (
+              <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-950/80 text-emerald-300 border border-emerald-800 font-mono flex items-center gap-1.5">
+                <span>🎙️</span>
+                <span>Live Oral (No Code)</span>
+              </span>
+            )}
+            {resumeText && (
+              <span className="text-[11px] font-medium px-2 py-0.5 rounded-lg bg-indigo-950/60 text-indigo-300 border border-indigo-800/60 flex items-center gap-1">
+                <span>📄</span>
+                <span>Resume-Tailored</span>
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3">
@@ -611,30 +658,88 @@ export default function InterviewWorkspace({
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-zinc-950/80 border-b border-zinc-800/80">
           {/* View Toggles */}
           <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
-            <button
-              type="button"
-              onClick={() => setActiveTab('code')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'code'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <span>{`{ }`}</span>
-              <span>Monaco Code IDE</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('notes')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                activeTab === 'notes'
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <span>📝</span>
-              <span>Architecture & Trade-offs</span>
-            </button>
+            {isConversationalMode ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('oral')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'oral'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span className={oralSpeech.isListening ? 'animate-pulse text-red-400' : ''}>🎙️</span>
+                  <span>Live Oral Response</span>
+                  {oralSpeech.isListening && (
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('notes')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'notes'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span>📝</span>
+                  <span>Architecture Notes</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('code')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'code'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span>{`{ }`}</span>
+                  <span>Scratchpad (Optional)</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('code')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'code'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span>{`{ }`}</span>
+                  <span>Monaco Code IDE</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('notes')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'notes'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span>📝</span>
+                  <span>Architecture & Trade-offs</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('oral')}
+                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
+                    activeTab === 'oral'
+                      ? 'bg-indigo-600 text-white shadow-sm'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <span>🎙️</span>
+                  <span>Oral Explanation</span>
+                </button>
+              </>
+            )}
           </div>
 
           {/* Controls (Active in Code Mode) */}
@@ -896,11 +1001,171 @@ export default function InterviewWorkspace({
           </div>
         )}
 
+        {/* Tab 3: Live Oral Stage (Non-Coding Conversational Interview) */}
+        {activeTab === 'oral' && (
+          <div className="p-5 sm:p-6 space-y-6 bg-gradient-to-b from-zinc-950/80 via-zinc-900/40 to-zinc-950/90">
+            {/* Top Oral Guidance Banner */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-indigo-950/30 border border-indigo-800/50">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🎙️</span>
+                  <h3 className="text-sm font-semibold text-white">Live Oral Examination Mode</h3>
+                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">
+                    No Code Required
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-300 leading-relaxed">
+                  Speak naturally about your approach, system boundaries, and architectural trade-offs. The AI interviewer analyzes your spoken audio and real-time transcript.
+                </p>
+              </div>
+
+              {/* Quick AI Audio Button */}
+              {speechPlayer.isTTSSupported && (
+                <button
+                  type="button"
+                  onClick={handleToggleQuestionAudio}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-all flex items-center gap-2 shrink-0 cursor-pointer shadow-sm ${
+                    speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt)
+                      ? 'bg-rose-950 border-rose-600 text-rose-200 animate-pulse'
+                      : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-200'
+                  }`}
+                >
+                  <span>{speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt) ? '⏹' : '🔊'}</span>
+                  <span>{speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt) ? 'Stop Question Voice' : 'Hear Interviewer Voice'}</span>
+                </button>
+              )}
+            </div>
+
+            {/* Microphone Recording Action Card */}
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/90 p-5 sm:p-6 shadow-inner space-y-5">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-lg ${
+                      oralSpeech.isListening
+                        ? 'bg-red-600 text-white animate-pulse shadow-red-600/40 ring-4 ring-red-500/20'
+                        : 'bg-indigo-600/20 border border-indigo-500/40 text-indigo-400'
+                    }`}
+                  >
+                    <span className="text-2xl">{oralSpeech.isListening ? '🎙️' : '🎤'}</span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                      <span>Candidate Audio Input</span>
+                      {oralSpeech.isListening && (
+                        <span className="flex items-center gap-1.5 text-xs font-mono text-red-400">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                          RECORDING LIVE
+                        </span>
+                      )}
+                    </h4>
+                    <p className="text-xs text-zinc-400">
+                      {oralSpeech.isListening
+                        ? 'Dictating in real-time... Speak your answer into your microphone.'
+                        : oralSpeech.isSTTSupported
+                        ? 'Click the button to start voice dictation, or type directly into the box.'
+                        : 'Web Speech STT is not supported in this browser. Please type your answer below.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Primary Mic Toggle */}
+                {oralSpeech.isSTTSupported && (
+                  <button
+                    type="button"
+                    onClick={oralSpeech.toggleListening}
+                    className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg cursor-pointer ${
+                      oralSpeech.isListening
+                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30 ring-2 ring-red-400'
+                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
+                    }`}
+                  >
+                    <span>{oralSpeech.isListening ? '⏹ Stop Dictation' : '🎙️ Start Speaking'}</span>
+                  </button>
+                )}
+              </div>
+
+              {oralSpeech.recognitionError && (
+                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-200 text-xs">
+                  {oralSpeech.recognitionError}
+                </div>
+              )}
+
+              {/* Soundwave Animation while recording */}
+              {oralSpeech.isListening && (
+                <div className="flex items-center justify-center gap-1.5 py-2">
+                  <div className="w-1 bg-red-500 h-6 animate-pulse rounded-full" />
+                  <div className="w-1 bg-indigo-500 h-10 animate-pulse delay-75 rounded-full" />
+                  <div className="w-1 bg-emerald-500 h-4 animate-pulse delay-150 rounded-full" />
+                  <div className="w-1 bg-indigo-500 h-8 animate-pulse delay-100 rounded-full" />
+                  <div className="w-1 bg-red-500 h-5 animate-pulse delay-200 rounded-full" />
+                  <span className="text-xs font-mono text-zinc-400 ml-3">Listening to your voice in real-time...</span>
+                </div>
+              )}
+
+              {/* Structuring Shortcuts */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                  <span>Quick Structure Starters (click to insert into your verbal response):</span>
+                  {oralAnswer && (
+                    <button
+                      type="button"
+                      onClick={() => setOralAnswer('')}
+                      className="text-zinc-500 hover:text-zinc-300 underline cursor-pointer"
+                    >
+                      Clear Answer
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    '1. Architectural Overview & System Flow:',
+                    '2. Key Technology Choices & Trade-offs:',
+                    '3. Scalability, Caching & Bottlenecks:',
+                    '4. Failure Recovery & Edge Cases:',
+                  ].map((starter) => (
+                    <button
+                      key={starter}
+                      type="button"
+                      onClick={() =>
+                        setOralAnswer((prev) =>
+                          prev ? `${prev}\n\n${starter}\n` : `${starter}\n`
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-indigo-300 hover:text-white transition-all cursor-pointer"
+                    >
+                      + {starter.slice(3)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Live Spoken Transcript Textarea */}
+              <div className="relative">
+                <textarea
+                  rows={10}
+                  value={oralAnswer}
+                  onChange={(e) => setOralAnswer(e.target.value)}
+                  placeholder="Your transcribed spoken answer will appear here in real-time as you speak. You can also edit, refine, or type directly..."
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white text-xs sm:text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-zinc-600 resize-y leading-relaxed"
+                />
+                <div className="absolute bottom-3 right-3 text-[10px] font-mono text-zinc-500 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800">
+                  {oralAnswer.trim() ? `${oralAnswer.trim().split(/\s+/).length} words` : '0 words'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Action / Submit Footer */}
         <form onSubmit={handleSubmit} className="p-4 sm:p-5 bg-zinc-950/90 border-t border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-xs text-zinc-400 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
-            <span>Both code and architectural notes are evaluated together by local Ollama.</span>
+            <span>
+              {isConversationalMode
+                ? 'Your oral response and architectural reasoning are evaluated directly by AI.'
+                : 'Both code and architectural notes are evaluated together by local Ollama.'}
+            </span>
           </div>
 
           <button
@@ -911,12 +1176,12 @@ export default function InterviewWorkspace({
             {isPending ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Evaluating Solution & Calibrating Follow-up...</span>
+                <span>Evaluating Verbal Response & Calibrating Follow-up...</span>
               </>
             ) : questionNumber >= totalQuestions ? (
-              'Submit & Finish Interview'
+              isConversationalMode ? 'Submit Verbal Answer & Finish Interview' : 'Submit & Finish Interview'
             ) : (
-              'Submit & Next Question →'
+              isConversationalMode ? 'Submit Verbal Answer & Next Question →' : 'Submit & Next Question →'
             )}
           </button>
         </form>

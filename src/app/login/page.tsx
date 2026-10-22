@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { login, signup } from './actions'
 
 export default async function LoginPage(props: { searchParams: Promise<{ message: string }> }) {
@@ -53,6 +54,15 @@ export default async function LoginPage(props: { searchParams: Promise<{ message
           )}
 
           <div className="flex flex-col gap-3 pt-2">
+            <Link
+              href="/dashboard"
+              className="group relative flex w-full justify-center rounded-lg bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500 transition-all shadow-sm shadow-emerald-600/20"
+            >
+              ⚡ Continue as Guest (Bypass Login) →
+            </Link>
+            <div className="relative my-2 text-center text-xs text-zinc-500">
+              <span className="bg-zinc-900 px-2">or sign in with credentials</span>
+            </div>
             <button
               formAction={login}
               className="group relative flex w-full justify-center rounded-lg bg-indigo-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 transition-all shadow-sm"

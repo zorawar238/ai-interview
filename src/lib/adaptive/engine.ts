@@ -91,8 +91,30 @@ export function getDeterministicFallbackQuestion(params: {
   difficulty: DifficultyLevel
   role: string
   rationale: string
+  format?: 'conversational' | 'coding'
+  resumeText?: string
 }): SingleQuestion {
-  const { topic, difficulty, role, rationale } = params
+  const { topic, difficulty, role, rationale, format = 'conversational', resumeText } = params
+
+  if (format === 'conversational') {
+    const resumeContext = resumeText && resumeText.trim()
+      ? ` Drawing directly from your background (${resumeText.slice(0, 120)}...), explain the specific architecture choices, trade-offs, and scaling bottlenecks you managed.`
+      : ` Walk me through your design process, high-availability strategy, database transaction choices, and how you diagnose unexpected production latency.`
+
+    return {
+      topic,
+      difficulty,
+      type: 'technical',
+      prompt: `[Live Architecture & Concept Discussion] As a ${role}, how would you architect, evaluate, or optimize an end-to-end system involving ${topic} at a ${difficulty} level?${resumeContext}`,
+      rubric: `Evaluate architectural breadth, operational foresight (availability, latency, data integrity), communication clarity (STAR/System design structure), and depth of engineering judgment without code writing.`,
+      hints: [
+        `Clarify requirements, scope, scale (e.g. read/write ratio), and core bottlenecks first.`,
+        `Articulate concrete trade-offs (e.g. CAP theorem, caching strategy, sync vs async messaging).`,
+        `Describe failure modes and how your design handles service crashes, network partitions, or data corruption.`,
+      ],
+      adaptationRationale: rationale,
+    }
+  }
 
   return {
     topic,
@@ -117,19 +139,35 @@ export async function generateBaselineQuestion(params: {
   experienceLevel: string
   topic: string
   difficulty: DifficultyLevel
+  format?: 'conversational' | 'coding'
+  resumeText?: string
 }): Promise<SingleQuestion> {
-  const { role, experienceLevel, topic, difficulty } = params
+  const { role, experienceLevel, topic, difficulty, format = 'conversational', resumeText } = params
+  const isConversational = format === 'conversational'
+
+  const resumeSection = resumeText && resumeText.trim()
+    ? `\nCandidate's Resume & Background Highlights:\n"""\n${resumeText.slice(0, 1500)}\n"""\n`
+    : ''
+
+  const formatInstruction = isConversational
+    ? `CRITICAL FORMAT REQUIREMENT: This is a LIVE CONVERSATIONAL ORAL INTERVIEW.
+DO NOT ask the candidate to write code, implement algorithms, or write functions.
+Instead, formulate a deep, thought-provoking technical, architectural, or behavioral scenario question about: ${topic}.
+${resumeText ? `Specifically incorporate and drill into their background/projects from their resume above to test real-world depth.` : ''}
+Focus on system architecture, operational decisions, data consistency, scalability trade-offs, and debugging war stories.`
+    : `Generate a realistic, focused practical coding challenge assessing hands-on implementation.`
 
   try {
     const result = await generateObject({
       model: ollama.chat('llama3.2'),
       schema: singleQuestionSchema,
-      prompt: `You are an expert technical interviewer conducting an adaptive interview for a ${experienceLevel} level ${role} role.
-      Generate the first baseline question to assess core technical competency.
+      prompt: `You are an expert technical interviewer conducting an interview for a ${experienceLevel} level ${role} role.
+      ${resumeSection}
+      ${formatInstruction}
       Topic: ${topic}.
       Difficulty level: ${difficulty}.
-      Ensure the question tests practical problem-solving and architectural judgment.
-      Include 2-3 progressive hints and evaluation rubric.`,
+      Ensure the question evaluates engineering judgment and deep technical comprehension.
+      Include 2-3 progressive hints and an evaluation rubric.`,
     })
 
     return result.object
@@ -140,6 +178,8 @@ export async function generateBaselineQuestion(params: {
       difficulty,
       role,
       rationale: `Baseline question in ${topic} to establish candidate competency.`,
+      format,
+      resumeText,
     })
   }
 }
@@ -160,6 +200,8 @@ export async function generateAdaptiveQuestion(params: {
   previousAnswer: string
   previousEvaluation: Partial<EvaluationResult> & { score: number }
   position: number
+  format?: 'conversational' | 'coding'
+  resumeText?: string
 }): Promise<{ question: SingleQuestion; adaptiveContext: AdaptiveContext }> {
   const {
     role,
@@ -170,7 +212,11 @@ export async function generateAdaptiveQuestion(params: {
     previousAnswer,
     previousEvaluation,
     position,
+    format = 'conversational',
+    resumeText,
   } = params
+
+  const isConversational = format === 'conversational'
 
   const plan = calculateAdaptiveStep({
     previousDifficulty: previousQuestion.difficulty,
@@ -188,12 +234,23 @@ export async function generateAdaptiveQuestion(params: {
     rationale: plan.rationale,
   }
 
+  const resumeSection = resumeText && resumeText.trim()
+    ? `\nCandidate's Background:\n"""\n${resumeText.slice(0, 1000)}\n"""\n`
+    : ''
+
+  const formatInstruction = isConversational
+    ? `CRITICAL FORMAT REQUIREMENT: This is an ORAL DISCUSSION interview.
+DO NOT ask the candidate to write code or functions.
+Formulate a probing architectural, technical concept, or scenario question about '${plan.nextTopic}'.
+Probe their engineering judgment, trade-offs, and operational decisions.`
+    : `Must be a realistic, practical coding or system problem.`
+
   try {
     const result = await generateObject({
       model: ollama.chat('llama3.2'),
       schema: singleQuestionSchema,
       prompt: `You are an expert technical interviewer conducting an adaptive interview for a ${experienceLevel} level ${role} role.
-
+${resumeSection}
 Context from Question ${position - 1}:
 - Topic: ${previousQuestion.topic} (${previousQuestion.difficulty})
 - Prompt: ${previousQuestion.prompt}
@@ -208,10 +265,11 @@ ${previousAnswer.slice(0, 1500)}
 Adaptive Calibration Directive:
 ${plan.directive}
 
+${formatInstruction}
+
 Generate Question ${position}:
 - Focus Topic: ${plan.nextTopic}
 - Difficulty: ${plan.nextDifficulty}
-- Must be a realistic, practical coding or system problem.
 - Include 2-3 progressive hints.
 - Include an adaptationRationale summarizing why this question was calibrated for the candidate.`,
     })
@@ -236,6 +294,8 @@ Generate Question ${position}:
       difficulty: plan.nextDifficulty,
       role,
       rationale: plan.rationale,
+      format,
+      resumeText,
     })
     return {
       question: fallback,

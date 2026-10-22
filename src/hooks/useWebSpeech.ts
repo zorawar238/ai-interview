@@ -34,8 +34,50 @@ declare global {
 }
 
 const emptySubscribe = () => () => {}
-
 const emptyVoices: SpeechSynthesisVoice[] = []
+let cachedVoices: SpeechSynthesisVoice[] = emptyVoices
+
+function areVoicesEqual(a: SpeechSynthesisVoice[], b: SpeechSynthesisVoice[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].name !== b[i].name || a[i].lang !== b[i].lang) {
+      return false
+    }
+  }
+  return true
+}
+
+function subscribeVoices(callback: () => void) {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return () => {}
+  }
+  window.speechSynthesis.addEventListener('voiceschanged', callback)
+  return () => {
+    window.speechSynthesis.removeEventListener('voiceschanged', callback)
+  }
+}
+
+function getVoicesSnapshot(): SpeechSynthesisVoice[] {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return emptyVoices
+  }
+  const current = window.speechSynthesis.getVoices()
+  if (!areVoicesEqual(current, cachedVoices)) {
+    cachedVoices = current
+  }
+  return cachedVoices
+}
+
+const getServerVoicesSnapshot = () => emptyVoices
+
+const getSTTSupported = () =>
+  typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+
+const getTTSSupported = () =>
+  typeof window !== 'undefined' && 'speechSynthesis' in window
+
+const getBooleanFalse = () => false
 
 /**
  * Strips code blocks, markdown asterisks, backticks, and URLs so synthetic
@@ -67,26 +109,20 @@ export function useWebSpeech(options: UseWebSpeechOptions = {}) {
   // 1. External Store subscriptions for browser capabilities (SSR & React 19 compiler pure)
   const isSTTSupported = useSyncExternalStore(
     emptySubscribe,
-    () => typeof window !== 'undefined' && !!(window.SpeechRecognition || window.webkitSpeechRecognition),
-    () => false
+    getSTTSupported,
+    getBooleanFalse
   )
 
   const isTTSSupported = useSyncExternalStore(
     emptySubscribe,
-    () => typeof window !== 'undefined' && 'speechSynthesis' in window,
-    () => false
+    getTTSSupported,
+    getBooleanFalse
   )
 
   const voices = useSyncExternalStore(
-    (callback) => {
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) return () => {}
-      window.speechSynthesis.addEventListener('voiceschanged', callback)
-      return () => {
-        window.speechSynthesis.removeEventListener('voiceschanged', callback)
-      }
-    },
-    () => (typeof window !== 'undefined' && 'speechSynthesis' in window ? window.speechSynthesis.getVoices() : emptyVoices),
-    () => emptyVoices
+    subscribeVoices,
+    getVoicesSnapshot,
+    getServerVoicesSnapshot
   )
 
   // Recognition (STT) State

@@ -6,6 +6,9 @@ import ReportExportActions from './ReportExportActions'
 import { EvaluationResult } from '@/lib/validations/evaluation'
 import { AdaptiveContext } from '@/lib/validations/interview'
 import { getTargetQuestionCount } from '@/lib/adaptive/engine'
+import { getCurrentUser, DEMO_USER } from '@/utils/auth'
+import { mockDb } from '@/lib/storage/mockDb'
+import { Interview, Question, Answer, Evaluation } from '@/types/database'
 
 export default async function InterviewSessionPage(props: {
   params: Promise<{ id: string }>
@@ -13,50 +16,93 @@ export default async function InterviewSessionPage(props: {
 }) {
   const { id } = await props.params
   const searchParams = await props.searchParams
-  const supabase = await createClient()
+  const user = await getCurrentUser()
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  // 1. Fetch interview details with instant mockDb path for guest mode
+  let interview: Interview | null = null
+  let questions: Question[] = []
+  let answers: Answer[] = []
+  let evaluations: Evaluation[] = []
 
-  if (!user) {
-    redirect('/login')
+  if (user.id === DEMO_USER.id) {
+    interview = mockDb.getInterviewById(id)
+    if (interview) {
+      questions = mockDb.getQuestionsByInterviewId(id)
+      answers = mockDb.getAnswersByInterviewId(id)
+      evaluations = mockDb.getEvaluationsByInterviewId(id)
+    }
   }
 
-  // 1. Fetch interview details
-  const { data: interview, error: interviewError } = await supabase
-    .from('interviews')
-    .select('*')
-    .eq('id', id)
-    .single()
+  if (!interview) {
+    const supabase = await createClient()
+    try {
+      const { data: interviewData, error: interviewError } = await supabase
+        .from('interviews')
+        .select('*')
+        .eq('id', id)
+        .single()
 
-  if (interviewError || !interview) {
-    redirect('/dashboard')
+      if (interviewData && !interviewError) {
+        interview = interviewData as Interview
+      }
+    } catch {}
+
+    if (!interview) {
+      interview = mockDb.getInterviewById(id)
+    }
+
+    if (!interview) {
+      redirect('/dashboard')
+    }
+
+    // 2. Fetch questions for this interview
+    try {
+      const { data: rawQuestions } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('interview_id', id)
+        .order('position', { ascending: true })
+
+      if (rawQuestions && rawQuestions.length > 0) {
+        questions = rawQuestions as Question[]
+      }
+    } catch {}
+
+    if (questions.length === 0) {
+      questions = mockDb.getQuestionsByInterviewId(id)
+    }
+
+    // 3. Fetch existing answers & evaluations
+    try {
+      const { data: rawAnswers } = await supabase
+        .from('answers')
+        .select('*')
+        .eq('interview_id', id)
+
+      if (rawAnswers && rawAnswers.length > 0) {
+        answers = rawAnswers as Answer[]
+      }
+    } catch {}
+
+    if (answers.length === 0) {
+      answers = mockDb.getAnswersByInterviewId(id)
+    }
+
+    try {
+      const { data: rawEvaluations } = await supabase
+        .from('evaluations')
+        .select('*')
+        .eq('interview_id', id)
+
+      if (rawEvaluations && rawEvaluations.length > 0) {
+        evaluations = rawEvaluations as Evaluation[]
+      }
+    } catch {}
+
+    if (evaluations.length === 0) {
+      evaluations = mockDb.getEvaluationsByInterviewId(id)
+    }
   }
-
-  // 2. Fetch questions for this interview
-  const { data: rawQuestions } = await supabase
-    .from('questions')
-    .select('*')
-    .eq('interview_id', id)
-    .order('position', { ascending: true })
-
-  const questions = rawQuestions ?? []
-
-  // 3. Fetch existing answers & evaluations
-  const { data: rawAnswers } = await supabase
-    .from('answers')
-    .select('*')
-    .eq('interview_id', id)
-
-  const answers = rawAnswers ?? []
-
-  const { data: rawEvaluations } = await supabase
-    .from('evaluations')
-    .select('*')
-    .eq('interview_id', id)
-
-  const evaluations = rawEvaluations ?? []
 
   const answeredQuestionIds = new Set(answers.map((a) => a.question_id))
   const answeredCount = answers.length
@@ -403,7 +449,7 @@ export default async function InterviewSessionPage(props: {
           </div>
         )}
 
-        {/* Interactive Workspace with Monaco Code Editor, Timer, Hints & Adaptive Calibration */}
+        {/* Interactive Workspace with Live Oral Discussion / Monaco Editor, Timer, Hints & Adaptive Calibration */}
         {currentQuestion && (
           <InterviewWorkspace
             interviewId={interview.id}
@@ -417,6 +463,9 @@ export default async function InterviewSessionPage(props: {
             adaptiveContext={currentAdaptiveContext}
             durationMinutes={interview.duration_minutes || 30}
             role={interview.role}
+            interviewFormat={interview.interview_format || (currentQuestion.type === 'coding' ? 'coding' : 'conversational')}
+            questionType={currentQuestion.type}
+            resumeText={interview.resume_text || null}
           />
         )}
       </div>

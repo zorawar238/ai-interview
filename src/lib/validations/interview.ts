@@ -7,6 +7,8 @@ export const createInterviewSchema = z.object({
   topics: z.array(z.string()).min(1, 'Select at least one topic'),
   durationMinutes: z.number().int().min(15).max(60).default(30),
   interviewMode: z.enum(['adaptive', 'static']).default('adaptive'),
+  interviewFormat: z.enum(['conversational', 'coding']).default('conversational'),
+  resumeText: z.string().optional().default(''),
 })
 
 export type CreateInterviewInput = z.infer<typeof createInterviewSchema>

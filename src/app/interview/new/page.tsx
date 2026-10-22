@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
+import { getCurrentUser } from '@/utils/auth'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createInterviewAction } from '../actions'
@@ -7,15 +7,7 @@ export default async function NewInterviewPage(props: {
   searchParams: Promise<{ error?: string }>
 }) {
   const searchParams = await props.searchParams
-  const supabase = await createClient()
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) {
-    redirect('/login')
-  }
+  const user = await getCurrentUser()
 
   const roleOptions = [
     { id: 'Frontend Engineer', label: 'Frontend Engineer' },
@@ -67,10 +59,57 @@ export default async function NewInterviewPage(props: {
         )}
 
         <form action={createInterviewAction} className="space-y-8 bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-6 sm:p-8 backdrop-blur-sm">
+          {/* Interview Format */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-semibold text-zinc-200">
+                1. Interview Format
+              </label>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/60 font-mono">
+                Conversational or Coding
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="relative flex flex-col p-4 rounded-xl border border-zinc-700/70 bg-zinc-800/40 hover:bg-zinc-800 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-950/30 transition-all">
+                <input
+                  type="radio"
+                  name="interviewFormat"
+                  value="conversational"
+                  defaultChecked
+                  className="sr-only"
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-white flex items-center gap-2">
+                    <span>🎙️ Live Conversational (No Coding)</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 font-mono border border-emerald-800/60">
+                      Recommended
+                    </span>
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+                  Real-time oral dialogue with the AI. Focuses on system architecture, engineering trade-offs, and conceptual deep-dives without writing code.
+                </p>
+              </label>
+
+              <label className="relative flex flex-col p-4 rounded-xl border border-zinc-700/70 bg-zinc-800/40 hover:bg-zinc-800 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-950/30 transition-all">
+                <input
+                  type="radio"
+                  name="interviewFormat"
+                  value="coding"
+                  className="sr-only"
+                />
+                <span className="text-sm font-semibold text-white">💻 Coding Assessment</span>
+                <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
+                  Hands-on coding challenges in Monaco IDE with sandbox test runner and automated compilation.
+                </p>
+              </label>
+            </div>
+          </div>
+
           {/* Target Role */}
           <div className="space-y-3">
             <label htmlFor="role" className="block text-sm font-semibold text-zinc-200">
-              1. Target Role
+              2. Target Role
             </label>
             <select
               id="role"
@@ -87,10 +126,27 @@ export default async function NewInterviewPage(props: {
             </select>
           </div>
 
+          {/* Student Resume & Project Experience */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label htmlFor="resumeText" className="block text-sm font-semibold text-zinc-200">
+                3. Candidate Resume & Experience Highlights <span className="text-xs font-normal text-zinc-400">(Optional)</span>
+              </label>
+              <span className="text-[11px] text-zinc-400 font-mono">Personalized AI Questions</span>
+            </div>
+            <textarea
+              id="resumeText"
+              name="resumeText"
+              rows={3}
+              placeholder="Paste your resume summary, notable past projects, or tech stack highlights (e.g. 'Built Redis distributed rate-limiter, managed multi-region Postgres replication, architected payment gateway webhook processor'). The AI interviewer will tailor questions directly around your actual experience."
+              className="w-full bg-zinc-800/60 border border-zinc-700/70 rounded-xl px-4 py-3 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm resize-none"
+            />
+          </div>
+
           {/* Experience Level */}
           <div className="space-y-3">
             <label className="block text-sm font-semibold text-zinc-200">
-              2. Experience Level
+              4. Experience Level
             </label>
             <div className="grid grid-cols-3 gap-3">
               {[
@@ -120,7 +176,7 @@ export default async function NewInterviewPage(props: {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="block text-sm font-semibold text-zinc-200">
-                3. Starting Difficulty (Baseline)
+                5. Starting Difficulty (Baseline)
               </label>
               <span className="text-[11px] text-zinc-400 font-mono">Calibrated for Question 1</span>
             </div>
@@ -152,7 +208,7 @@ export default async function NewInterviewPage(props: {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="block text-sm font-semibold text-zinc-200">
-                4. Calibration Mode
+                6. Calibration Mode
               </label>
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 font-mono">
                 Adaptive Engine
@@ -176,7 +232,7 @@ export default async function NewInterviewPage(props: {
                   </span>
                 </div>
                 <p className="text-xs text-zinc-400 mt-2 leading-relaxed">
-                  AI actively scales difficulty and topics in real-time based on your submitted code and rubric scores.
+                  AI actively scales difficulty and topics in real-time based on your oral answer responses and rubric scores.
                 </p>
               </label>
               <label className="relative flex flex-col p-4 rounded-xl border border-zinc-700/70 bg-zinc-800/40 hover:bg-zinc-800 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-950/30 transition-all">
@@ -194,12 +250,23 @@ export default async function NewInterviewPage(props: {
             </div>
           </div>
 
-          {/* Topics Multi-Select */}
+          {/* Topics Multi-Select & Custom Topic */}
           <div className="space-y-3">
             <label className="block text-sm font-semibold text-zinc-200">
-              5. Focus Topics <span className="text-xs font-normal text-zinc-400">(Pick at least 1)</span>
+              7. Focus Topics <span className="text-xs font-normal text-zinc-400">(Select or specify custom)</span>
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+
+            {/* Custom Topic Input */}
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                name="customTopic"
+                placeholder="Or type a custom topic: e.g. Distributed Caching, WebSockets, Sharding, LLM RAG Pipeline"
+                className="w-full bg-zinc-800/60 border border-zinc-700/70 rounded-xl px-4 py-2.5 text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
               {topicOptions.map((topic, idx) => (
                 <label
                   key={topic}
