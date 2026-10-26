@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import InterviewWorkspace from './InterviewWorkspace'
 import ReportExportActions from './ReportExportActions'
+import { ExecutiveBriefingPlayer, QuestionEvaluationPlayer } from './EvaluationVoicePlayer'
 import { EvaluationResult } from '@/lib/validations/evaluation'
 import { AdaptiveContext } from '@/lib/validations/interview'
 import { getTargetQuestionCount } from '@/lib/adaptive/engine'
@@ -199,6 +200,23 @@ export default async function InterviewSessionPage(props: {
                 <p className="text-sm text-zinc-400 mt-2 max-w-xl">
                   Evaluated across {questions.length} questions by your local AI interviewer based on technical accuracy, edge-case consideration, and communication.
                 </p>
+                <div className="mt-4 flex items-center gap-3">
+                  <ExecutiveBriefingPlayer
+                    role={interview.role}
+                    difficulty={interview.difficulty}
+                    score={averageScore}
+                    questionsCount={questions.length}
+                    verdict={
+                      averageScore >= 85
+                        ? 'Exceptional Performance'
+                        : averageScore >= 70
+                        ? 'Strong Candidate'
+                        : averageScore >= 55
+                        ? 'Borderline — Needs Targeted Practice'
+                        : 'Foundational Gaps Identified'
+                    }
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col items-center justify-center p-5 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 min-w-[130px]">
@@ -344,9 +362,19 @@ export default async function InterviewSessionPage(props: {
                   {parsedDetails && (
                     <div className="bg-zinc-950/50 border border-indigo-950/60 rounded-xl p-5 space-y-4">
                       <div>
-                        <span className="text-xs uppercase tracking-wider text-indigo-400 font-semibold block mb-1">
-                          AI Evaluator Feedback:
-                        </span>
+                        <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                          <span className="text-xs uppercase tracking-wider text-indigo-400 font-semibold">
+                            AI Evaluator Feedback:
+                          </span>
+                          <QuestionEvaluationPlayer
+                            questionNumber={idx + 1}
+                            topic={q.topic}
+                            score={matchedEvaluation?.score ?? null}
+                            feedback={parsedDetails.feedback || ''}
+                            strengths={parsedDetails.strengths}
+                            areasForImprovement={parsedDetails.areasForImprovement}
+                          />
+                        </div>
                         <p className="text-sm text-zinc-300 leading-relaxed">
                           {parsedDetails.feedback}
                         </p>

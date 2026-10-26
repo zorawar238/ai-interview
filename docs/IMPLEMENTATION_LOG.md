@@ -500,6 +500,40 @@ Deliver a hands-free, verbal-first live voice interview experience where candida
 - `npm test`: **5 test files, 42 tests passed (100% pass rate)**
 - `npm run build`: **Next.js 16.4.3 Turbopack production build compiled with 0 errors**
 
+---
+
+## Milestone 15: Multi-Turn Verbal Dialogue, Voice Persona Customization & Multimodal Audio Playback
+**Date:** 2026-10-27
+
+**Task Objective:**
+Advance the verbal-first platform into a true two-way conversational interview experience. Support multi-turn clarifying questions spoken aloud, customized AI interviewer voice personas, granular rate and pitch controls, and multimodal voice playback for executive performance briefings and question-by-question evaluations.
+
+**Files Created / Modified:**
+- `src/app/interview/[id]/EvaluationVoicePlayer.tsx` (Client component providing `ExecutiveBriefingPlayer` and `QuestionEvaluationPlayer` with start/stop speech playback)
+- `src/hooks/useWebSpeech.ts` (Added support for custom speech rate, pitch, and explicit voice name selection in `useWebSpeech` and `speak`)
+- `src/lib/voice/commands.ts` (Added `ask_clarification` intent detection and sanitization)
+- `src/lib/voice/__tests__/commands.test.ts` (Added test cases verifying `ask_clarification` recognition and transcript sanitization)
+- `src/hooks/useLiveVoiceAgent.ts` (Added `speaking_clarification` state, `speakClarificationAloud` auto-handoff, and voice settings propagation)
+- `src/app/interview/[id]/InterviewWorkspace.tsx` (Added interactive clarification dialog with architectural presets, Voice Settings panel for speed/pitch/voice persona, and dynamic soundwave integration)
+- `src/app/interview/[id]/page.tsx` (Integrated `ExecutiveBriefingPlayer` into executive overview and `QuestionEvaluationPlayer` into each question card)
+
+**What was implemented:**
+1. **Interactive Multi-Turn Clarification Dialogue**:
+   - Candidates can ask clarifying questions either verbally (*"Can I ask a clarifying question?"*) or via the `💬 Ask Clarification` action.
+   - The AI interviewer dynamically streams the response via `/api/chat`, articulates the clarification aloud using Web Speech, and automatically resumes hands-free candidate listening.
+2. **AI Interviewer Voice Persona & Audio Settings**:
+   - Customizable speech rate: `0.85x` (deliberate), `1.0x` (standard), `1.15x` (conversational), `1.3x` (brisk).
+   - Voice persona selector filtering detected browser English voices (Natural, Google, Neural).
+   - Real-time voice sample preview button directly inside the workspace.
+3. **Multimodal Evaluation Audio Playback**:
+   - **Executive Briefing**: Candidates can listen to their overall performance evaluation, score, and verdict read aloud.
+   - **Question Evaluation Playback**: Dedicated audio button on each question card reading feedback, strengths, and targeted improvement areas.
+
+**Verification Results:**
+- `npm test`: **5 test files, 43 tests passed (100% pass rate)**
+- `npm run build`: **Next.js 16.4.3 Turbopack production build compiled with 0 errors**
+
+
 
 
 

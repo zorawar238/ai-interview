@@ -10,6 +10,7 @@ export type VoiceAgentStatus =
   | 'listening'
   | 'repeating_question'
   | 'speaking_hint'
+  | 'speaking_clarification'
   | 'submitting'
   | 'paused'
 
@@ -22,6 +23,10 @@ export interface UseLiveVoiceAgentOptions {
   onClearAnswer: () => void
   onRequestHint?: () => void
   onSubmitAnswer?: () => void
+  onAskClarification?: (spokenQuery: string) => void
+  speechRate?: number
+  speechPitch?: number
+  selectedVoiceName?: string
   autoStartOnMount?: boolean
 }
 
@@ -34,6 +39,10 @@ export function useLiveVoiceAgent({
   onClearAnswer,
   onRequestHint,
   onSubmitAnswer,
+  onAskClarification,
+  speechRate = 1.05,
+  speechPitch = 1.0,
+  selectedVoiceName,
   autoStartOnMount = true,
 }: UseLiveVoiceAgentOptions) {
   const [agentStatus, setAgentStatus] = useState<VoiceAgentStatus>('idle')
@@ -46,10 +55,12 @@ export function useLiveVoiceAgent({
   const lastSpokenQuestionRef = useRef<number | null>(null)
   const isRepeatingRef = useRef(false)
   const isHintingRef = useRef(false)
+  const isClarifyingRef = useRef(false)
   const onTranscriptRef = useRef(onTranscriptUpdate)
   const onClearRef = useRef(onClearAnswer)
   const onRequestHintRef = useRef(onRequestHint)
   const onSubmitAnswerRef = useRef(onSubmitAnswer)
+  const onAskClarificationRef = useRef(onAskClarification)
 
   // Web Audio API refs for real microphone volume sampling
   const audioContextRef = useRef<AudioContext | null>(null)
@@ -73,8 +84,15 @@ export function useLiveVoiceAgent({
     onSubmitAnswerRef.current = onSubmitAnswer
   }, [onSubmitAnswer])
 
+  useEffect(() => {
+    onAskClarificationRef.current = onAskClarification
+  }, [onAskClarification])
+
   // Dedicated speech synthesis player
   const speech = useWebSpeech({
+    defaultRate: speechRate,
+    defaultPitch: speechPitch,
+    preferredVoiceName: selectedVoiceName,
     onTranscript: (spokenPhrase) => {
       handleCandidateSpokenPhrase(spokenPhrase)
     },
@@ -174,6 +192,21 @@ export function useLiveVoiceAgent({
     [speech, stopAudioVolumeMonitoring, beginListeningHandsFree]
   )
 
+  // Speak clarifying response aloud
+  const speakClarificationAloud = useCallback(
+    (clarificationText: string) => {
+      speech.stopListening()
+      stopAudioVolumeMonitoring()
+      setAgentStatus('speaking_clarification')
+      setCommandNotice('Interviewer answering clarification...')
+
+      speech.speak(clarificationText, () => {
+        beginListeningHandsFree()
+      })
+    },
+    [speech, stopAudioVolumeMonitoring, beginListeningHandsFree]
+  )
+
   // Articulate question and then auto-transition to listening
   const speakQuestionAndListen = useCallback(
     (isRepeat = false) => {
@@ -223,6 +256,18 @@ export function useLiveVoiceAgent({
           onRequestHintRef.current()
           setTimeout(() => {
             isHintingRef.current = false
+          }, 4000)
+        }
+        return
+      }
+
+      if (command === 'ask_clarification') {
+        if (!isClarifyingRef.current && onAskClarificationRef.current) {
+          isClarifyingRef.current = true
+          setCommandNotice('Command detected: "Clarifying Question"')
+          onAskClarificationRef.current(spokenText)
+          setTimeout(() => {
+            isClarifyingRef.current = false
           }, 4000)
         }
         return
@@ -317,9 +362,11 @@ export function useLiveVoiceAgent({
     isTTSSupported: speech.isTTSSupported,
     recognitionError: speech.recognitionError,
     transcript: speech.transcript,
+    voices: speech.voices,
     startLiveSession,
     triggerRepeat,
     speakHintAloud,
+    speakClarificationAloud,
     toggleListeningPause,
     stopAll,
   }

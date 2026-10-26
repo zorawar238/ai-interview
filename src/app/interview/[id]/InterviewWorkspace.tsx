@@ -249,12 +249,27 @@ export default function InterviewWorkspace({
   const [isPending, startTransition] = useTransition()
   const performSubmissionRef = useRef<() => void>(() => {})
 
+  // Voice Persona & Settings State
+  const [speechRate, setSpeechRate] = useState<number>(1.05)
+  const [speechPitch, setSpeechPitch] = useState<number>(1.0)
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string>('')
+  const [isVoiceSettingsOpen, setIsVoiceSettingsOpen] = useState(false)
+  const [isClarificationModalOpen, setIsClarificationModalOpen] = useState(false)
+  const [clarificationInput, setClarificationInput] = useState('')
+
+  const sendChatMessageRef = useRef<
+    (text?: string, options?: { speakAloudViaLiveAgent?: boolean }) => Promise<void>
+  >(async () => {})
+
   // 7. Live Hands-Free Conversational Voice Agent (Verbal-First Engine)
   const liveVoice = useLiveVoiceAgent({
     questionNumber,
     totalQuestions,
     topic,
     prompt,
+    speechRate,
+    speechPitch,
+    selectedVoiceName,
     onTranscriptUpdate: (transcribedChunk) => {
       setOralAnswer((prev) => (prev ? `${prev} ${transcribedChunk}` : transcribedChunk))
     },
@@ -273,6 +288,12 @@ export default function InterviewWorkspace({
     },
     onSubmitAnswer: () => {
       performSubmissionRef.current()
+    },
+    onAskClarification: (spokenQuery) => {
+      sendChatMessageRef.current(
+        spokenQuery || 'Can you clarify the requirements and system constraints for this question?',
+        { speakAloudViaLiveAgent: true }
+      )
     },
   })
 
@@ -388,7 +409,10 @@ export default function InterviewWorkspace({
   }
 
   // Handle sending a message to AI Interviewer
-  const handleSendChatMessage = async (textToSend?: string) => {
+  const handleSendChatMessage = async (
+    textToSend?: string,
+    options?: { speakAloudViaLiveAgent?: boolean }
+  ) => {
     const messageContent = textToSend || chatInput.trim()
     if (!messageContent || isChatStreaming) return
 
@@ -429,27 +453,37 @@ export default function InterviewWorkspace({
         },
       })
 
-      if (autoSpeakAssistant && accumulatedText) {
+      if (options?.speakAloudViaLiveAgent && accumulatedText) {
+        liveVoice.speakClarificationAloud(accumulatedText)
+      } else if (autoSpeakAssistant && accumulatedText) {
         setSpeakingMessageId(assistantMsg.id)
         speechPlayer.speak(accumulatedText, () => setSpeakingMessageId(null))
       }
     } catch (err: unknown) {
       console.error('Chat error:', err)
+      const errText =
+        'Sorry, I could not generate a response. Please check if your local Ollama server is running with model llama3.2.'
       setChatMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsg.id
             ? {
                 ...m,
-                content:
-                  'Sorry, I could not generate a response. Please check if your local Ollama server is running with model llama3.2.',
+                content: errText,
               }
             : m
         )
       )
+      if (options?.speakAloudViaLiveAgent) {
+        liveVoice.speakClarificationAloud(errText)
+      }
     } finally {
       setIsChatStreaming(false)
     }
   }
+
+  useEffect(() => {
+    sendChatMessageRef.current = handleSendChatMessage
+  })
 
   // Submit candidate response
   const executeSubmit = () => {
@@ -740,6 +774,11 @@ export default function InterviewWorkspace({
                     <span className="animate-pulse">🤖</span>
                     <div className="absolute inset-0 rounded-full border-2 border-indigo-400 animate-ping opacity-30" />
                   </div>
+                ) : liveVoice.agentStatus === 'speaking_clarification' ? (
+                  <div className="relative w-16 h-16 rounded-full bg-blue-600/20 border-2 border-blue-500 flex items-center justify-center text-2xl shadow-lg shadow-blue-600/40">
+                    <span className="animate-pulse">💬</span>
+                    <div className="absolute inset-0 rounded-full border-2 border-blue-400 animate-ping opacity-30" />
+                  </div>
                 ) : liveVoice.agentStatus === 'listening' ? (
                   <div className="relative w-16 h-16 rounded-full bg-emerald-600/20 border-2 border-emerald-500 flex items-center justify-center text-2xl shadow-lg shadow-emerald-600/40">
                     <span className="animate-pulse">🎙️</span>
@@ -766,6 +805,12 @@ export default function InterviewWorkspace({
                       Repeating Question Aloud...
                     </span>
                   )}
+                  {liveVoice.agentStatus === 'speaking_clarification' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-700 text-xs font-mono font-semibold flex items-center gap-1.5 animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+                      Interviewer Answering Clarification Aloud...
+                    </span>
+                  )}
                   {liveVoice.agentStatus === 'listening' && (
                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700 text-xs font-mono font-semibold flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
@@ -780,7 +825,7 @@ export default function InterviewWorkspace({
                 </div>
 
                 <p className="text-xs text-zinc-300 mt-1.5">
-                  {liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question'
+                  {liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question' || liveVoice.agentStatus === 'speaking_clarification'
                     ? 'Listen carefully. Your microphone will automatically open as soon as the interviewer finishes speaking.'
                     : liveVoice.agentStatus === 'listening'
                     ? 'Speak your technical reasoning, system design, or algorithm aloud. It transcribes live below.'
@@ -797,20 +842,29 @@ export default function InterviewWorkspace({
             </div>
 
             {/* Voice Controls */}
-            <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+            <div className="flex items-center gap-2 self-end sm:self-center shrink-0 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsClarificationModalOpen(true)}
+                className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-indigo-300 hover:text-white text-xs font-medium border border-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                title="Ask the AI interviewer a clarifying question"
+              >
+                <span>💬</span>
+                <span>Ask Clarification</span>
+              </button>
               <button
                 type="button"
                 onClick={liveVoice.triggerRepeat}
-                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
                 title="Repeat the question aloud"
               >
                 <span>🔄</span>
-                <span>Repeat Question</span>
+                <span>Repeat</span>
               </button>
               <button
                 type="button"
                 onClick={liveVoice.toggleListeningPause}
-                className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
                   liveVoice.agentStatus === 'listening'
                     ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700'
                     : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
@@ -818,14 +872,192 @@ export default function InterviewWorkspace({
               >
                 <span>{liveVoice.agentStatus === 'listening' ? '⏸ Pause Mic' : '▶ Resume Mic'}</span>
               </button>
+              <button
+                type="button"
+                onClick={() => setIsVoiceSettingsOpen(!isVoiceSettingsOpen)}
+                className={`px-3 py-2 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                  isVoiceSettingsOpen
+                    ? 'bg-indigo-600 text-white border-indigo-500'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
+                }`}
+                title="Interviewer voice persona, speed, and pitch settings"
+              >
+                <span>⚙️</span>
+                <span>Settings</span>
+              </button>
             </div>
           </div>
+
+          {/* Voice Persona & Audio Settings Panel */}
+          {isVoiceSettingsOpen && (
+            <div className="p-4 rounded-2xl bg-zinc-950/90 border border-indigo-900/60 shadow-xl space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800/80">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white">⚙️ AI Interviewer Voice Persona & Rate</span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">
+                    Client Audio
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsVoiceSettingsOpen(false)}
+                  className="text-xs text-zinc-400 hover:text-white cursor-pointer"
+                >
+                  ✕ Close
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                {/* Voice Selector */}
+                <div className="space-y-1.5">
+                  <label className="text-zinc-400 font-mono block">Voice Persona:</label>
+                  <select
+                    value={selectedVoiceName}
+                    onChange={(e) => setSelectedVoiceName(e.target.value)}
+                    className="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-white font-sans focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="">Default AI Voice (Natural / Neural)</option>
+                    {liveVoice.voices
+                      .filter((v) => v.lang.startsWith('en'))
+                      .map((v) => (
+                        <option key={v.name} value={v.name}>
+                          {v.name} ({v.lang})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+
+                {/* Speed / Rate */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-center text-zinc-400 font-mono">
+                    <span>Speed ({speechRate}x):</span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    {[0.85, 1.0, 1.15, 1.3].map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setSpeechRate(r)}
+                        className={`flex-1 py-1.5 rounded-lg font-mono text-[11px] border transition-all cursor-pointer ${
+                          speechRate === r
+                            ? 'bg-indigo-600 text-white border-indigo-500'
+                            : 'bg-zinc-900 text-zinc-400 hover:text-white border-zinc-800'
+                        }`}
+                      >
+                        {r}x
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Test Voice Sample */}
+                <div className="space-y-1.5">
+                  <label className="text-zinc-400 font-mono block">Test Voice Sample:</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      liveVoice.speakClarificationAloud(
+                        'Hello! I am your lead technical interviewer. I will be evaluating your architectural design and engineering decisions.'
+                      )
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-indigo-300 hover:text-white font-medium border border-zinc-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <span>🔊</span>
+                    <span>Test Voice Preview</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Clarification Dialog Modal */}
+          {isClarificationModalOpen && (
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-indigo-950/40 via-zinc-950/90 to-zinc-950 border border-indigo-700/60 shadow-2xl space-y-4">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                  <span>💬</span>
+                  <span>Ask AI Interviewer Clarifying Question Aloud</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsClarificationModalOpen(false)}
+                  className="text-xs text-zinc-400 hover:text-white cursor-pointer"
+                >
+                  ✕ Close
+                </button>
+              </div>
+
+              <p className="text-xs text-zinc-300">
+                Select a standard clarifying constraint or ask your own. The interviewer will respond verbally aloud to clarify the requirements before you continue your solution.
+              </p>
+
+              {/* Quick Preset Architectural Questions */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-mono text-zinc-400">Quick Clarifying Questions:</span>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    'What are the expected throughput (QPS) and latency SLAs?',
+                    'Can we assume all input data fits within local server RAM?',
+                    'What is the read-to-write ratio in this system?',
+                    'Should we optimize for high consistency or high availability (CAP trade-off)?',
+                  ].map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => {
+                        setIsClarificationModalOpen(false)
+                        handleSendChatMessage(q, { speakAloudViaLiveAgent: true })
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-left text-xs text-indigo-300 hover:text-white transition-all cursor-pointer"
+                    >
+                      🗣️ &quot;{q}&quot;
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Custom Clarification Input */}
+              <div className="flex gap-2 pt-1">
+                <input
+                  type="text"
+                  value={clarificationInput}
+                  onChange={(e) => setClarificationInput(e.target.value)}
+                  placeholder="Ask any clarifying question (e.g., Can we use a Redis cache for session storage?)..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && clarificationInput.trim()) {
+                      const text = clarificationInput.trim()
+                      setClarificationInput('')
+                      setIsClarificationModalOpen(false)
+                      handleSendChatMessage(text, { speakAloudViaLiveAgent: true })
+                    }
+                  }}
+                  className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-sans"
+                />
+                <button
+                  type="button"
+                  disabled={!clarificationInput.trim() || isChatStreaming}
+                  onClick={() => {
+                    if (clarificationInput.trim()) {
+                      const text = clarificationInput.trim()
+                      setClarificationInput('')
+                      setIsClarificationModalOpen(false)
+                      handleSendChatMessage(text, { speakAloudViaLiveAgent: true })
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-medium text-xs transition-all cursor-pointer shadow-md"
+                >
+                  Ask Aloud
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Real-time Voice Soundwave Animation */}
           {(liveVoice.agentStatus === 'listening' ||
             liveVoice.agentStatus === 'speaking_question' ||
             liveVoice.agentStatus === 'repeating_question' ||
-            liveVoice.agentStatus === 'speaking_hint') && (
+            liveVoice.agentStatus === 'speaking_hint' ||
+            liveVoice.agentStatus === 'speaking_clarification') && (
             <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
               <div className="flex items-center gap-1.5 h-12">
                 {[
@@ -862,6 +1094,8 @@ export default function InterviewWorkspace({
                       : 'Microphone Live • Speak your answer...'
                     : liveVoice.agentStatus === 'speaking_hint'
                     ? 'Interviewer reading Socratic hint aloud...'
+                    : liveVoice.agentStatus === 'speaking_clarification'
+                    ? 'Interviewer answering clarification aloud...'
                     : liveVoice.agentStatus === 'repeating_question'
                     ? 'Interviewer repeating question aloud...'
                     : 'Interviewer articulating question aloud...'}
@@ -888,10 +1122,14 @@ export default function InterviewWorkspace({
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 pt-1 text-[11px] font-mono">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-1 text-[11px] font-mono">
               <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-2">
                 <span className="text-indigo-400">🔄</span>
                 <span>Say: <strong className="text-white">&quot;Repeat question&quot;</strong></span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-2">
+                <span className="text-blue-400">💬</span>
+                <span>Say: <strong className="text-white">&quot;Clarifying question&quot;</strong></span>
               </div>
               <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-2">
                 <span className="text-amber-400">💡</span>

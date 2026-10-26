@@ -101,10 +101,19 @@ function sanitizeTextForSpeech(raw: string): string {
 export interface UseWebSpeechOptions {
   onTranscript?: (text: string) => void
   preferredLanguage?: string
+  defaultRate?: number
+  defaultPitch?: number
+  preferredVoiceName?: string
 }
 
 export function useWebSpeech(options: UseWebSpeechOptions = {}) {
-  const { onTranscript, preferredLanguage = 'en-US' } = options
+  const {
+    onTranscript,
+    preferredLanguage = 'en-US',
+    defaultRate = 1.05,
+    defaultPitch = 1.0,
+    preferredVoiceName,
+  } = options
 
   // 1. External Store subscriptions for browser capabilities (SSR & React 19 compiler pure)
   const isSTTSupported = useSyncExternalStore(
@@ -251,7 +260,11 @@ export function useWebSpeech(options: UseWebSpeechOptions = {}) {
 
   // 5. Speak Aloud via Text-to-Speech
   const speak = useCallback(
-    (textToSpeak: string, onFinished?: () => void) => {
+    (
+      textToSpeak: string,
+      onFinished?: () => void,
+      customOptions?: { rate?: number; pitch?: number; voiceName?: string }
+    ) => {
       if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
 
       // Cancel previous speech immediately
@@ -262,18 +275,29 @@ export function useWebSpeech(options: UseWebSpeechOptions = {}) {
 
       const utterance = new SpeechSynthesisUtterance(cleaned)
       utterance.lang = preferredLanguage
-      utterance.rate = 1.05 // natural conversational cadence
-      utterance.pitch = 1.0
+      utterance.rate = customOptions?.rate ?? defaultRate
+      utterance.pitch = customOptions?.pitch ?? defaultPitch
 
-      // Pick preferred English voice if available
+      // Pick selected or preferred English voice if available
       if (voices.length > 0) {
-        const naturalVoice =
-          voices.find((v) => v.lang.startsWith('en') && (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural'))) ||
-          voices.find((v) => v.lang.startsWith('en')) ||
-          voices[0]
+        const targetVoiceName = customOptions?.voiceName || preferredVoiceName
+        let selectedVoice: SpeechSynthesisVoice | undefined
+        if (targetVoiceName) {
+          selectedVoice = voices.find((v) => v.name === targetVoiceName)
+        }
+        if (!selectedVoice) {
+          selectedVoice =
+            voices.find(
+              (v) =>
+                v.lang.startsWith('en') &&
+                (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural'))
+            ) ||
+            voices.find((v) => v.lang.startsWith('en')) ||
+            voices[0]
+        }
 
-        if (naturalVoice) {
-          utterance.voice = naturalVoice
+        if (selectedVoice) {
+          utterance.voice = selectedVoice
         }
       }
 
@@ -296,7 +320,7 @@ export function useWebSpeech(options: UseWebSpeechOptions = {}) {
 
       window.speechSynthesis.speak(utterance)
     },
-    [preferredLanguage, voices]
+    [preferredLanguage, defaultRate, defaultPitch, preferredVoiceName, voices]
   )
 
   // 6. Stop Speaking

@@ -28,6 +28,12 @@ describe('Voice Commands Engine', () => {
     expect(detectVoiceCommand('That is my answer, please submit')).toBe('submit_answer')
   })
 
+  it('detects ask clarification intent variations', () => {
+    expect(detectVoiceCommand('Can I ask a clarifying question?')).toBe('ask_clarification')
+    expect(detectVoiceCommand('I have a clarifying question about constraints')).toBe('ask_clarification')
+    expect(detectVoiceCommand('Can you clarify requirements?')).toBe('ask_clarification')
+  })
+
   it('returns null for non-command technical answers', () => {
     expect(
       detectVoiceCommand('We should use a hash map with two pointers for optimal O(N) complexity')
@@ -42,5 +48,10 @@ describe('Voice Commands Engine', () => {
     const cleaned = sanitizeAnswerTranscript(raw)
     expect(cleaned).not.toContain('give me a hint')
     expect(cleaned).toContain('I will use a Redis cache with LRU eviction')
+
+    const rawClarify = 'Can I ask a clarifying question? We should assume distributed data'
+    const cleanedClarify = sanitizeAnswerTranscript(rawClarify)
+    expect(cleanedClarify).not.toContain('clarifying question')
+    expect(cleanedClarify).toContain('We should assume distributed data')
   })
 })

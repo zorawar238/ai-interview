@@ -8,6 +8,7 @@ export type VoiceCommand =
   | 'clear_answer'
   | 'request_hint'
   | 'submit_answer'
+  | 'ask_clarification'
   | null
 
 const REPEAT_PATTERNS = [
@@ -54,6 +55,18 @@ const SUBMIT_PATTERNS = [
   'submit and next',
 ]
 
+const CLARIFY_PATTERNS = [
+  'clarifying question',
+  'clarify the question',
+  'can i ask a clarifying question',
+  'can i ask a question',
+  'i have a clarifying question',
+  'i have a question',
+  'clarify the constraints',
+  'clarify requirements',
+  'quick question for you',
+]
+
 /**
  * Detects whether the spoken phrase matches a conversational command.
  */
@@ -79,6 +92,12 @@ export function detectVoiceCommand(phrase: string): VoiceCommand {
     }
   }
 
+  for (const pattern of CLARIFY_PATTERNS) {
+    if (normalized.includes(pattern)) {
+      return 'ask_clarification'
+    }
+  }
+
   for (const pattern of CLEAR_PATTERNS) {
     if (normalized.includes(pattern)) {
       return 'clear_answer'
@@ -98,6 +117,7 @@ export function sanitizeAnswerTranscript(text: string): string {
     ...REPEAT_PATTERNS,
     ...HINT_PATTERNS,
     ...SUBMIT_PATTERNS,
+    ...CLARIFY_PATTERNS,
     ...CLEAR_PATTERNS,
   ]
 
