@@ -3,7 +3,12 @@
  * Detects real-time conversational commands spoken by the candidate.
  */
 
-export type VoiceCommand = 'repeat_question' | 'clear_answer' | null
+export type VoiceCommand =
+  | 'repeat_question'
+  | 'clear_answer'
+  | 'request_hint'
+  | 'submit_answer'
+  | null
 
 const REPEAT_PATTERNS = [
   'repeat the question',
@@ -26,6 +31,29 @@ const CLEAR_PATTERNS = [
   'delete my answer',
 ]
 
+const HINT_PATTERNS = [
+  'give me a hint',
+  'can i get a hint',
+  'can you give me a hint',
+  'i need a hint',
+  'provide a hint',
+  'give a hint',
+  'read hint',
+  'what is the hint',
+  'unlock hint',
+]
+
+const SUBMIT_PATTERNS = [
+  'submit my answer',
+  'submit the answer',
+  'submit answer',
+  'i am done with my answer',
+  'i am finished with my answer',
+  'that is my answer',
+  'finish my answer',
+  'submit and next',
+]
+
 /**
  * Detects whether the spoken phrase matches a conversational command.
  */
@@ -36,6 +64,18 @@ export function detectVoiceCommand(phrase: string): VoiceCommand {
   for (const pattern of REPEAT_PATTERNS) {
     if (normalized.includes(pattern)) {
       return 'repeat_question'
+    }
+  }
+
+  for (const pattern of HINT_PATTERNS) {
+    if (normalized.includes(pattern)) {
+      return 'request_hint'
+    }
+  }
+
+  for (const pattern of SUBMIT_PATTERNS) {
+    if (normalized.includes(pattern)) {
+      return 'submit_answer'
     }
   }
 
@@ -54,7 +94,12 @@ export function detectVoiceCommand(phrase: string): VoiceCommand {
  */
 export function sanitizeAnswerTranscript(text: string): string {
   let cleaned = text
-  const allPatterns = [...REPEAT_PATTERNS, ...CLEAR_PATTERNS]
+  const allPatterns = [
+    ...REPEAT_PATTERNS,
+    ...HINT_PATTERNS,
+    ...SUBMIT_PATTERNS,
+    ...CLEAR_PATTERNS,
+  ]
 
   for (const pattern of allPatterns) {
     const regex = new RegExp(`\\b${pattern}\\b`, 'gi')

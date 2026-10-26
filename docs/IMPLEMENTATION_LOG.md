@@ -453,12 +453,53 @@ Fulfill PRD §14/§16 and AI Agent Rules §7 by introducing an automated, lightn
 5. **Runtime Zod Schema Enforcement**:
    - Verified that evaluation scores are constrained strictly within $0 \le \text{score} \le 100$, rejecting invalid scores or non-standard performance verdicts.
 
-**Verification Results:**
-- `npm test`: **3 test files, 29 tests passed (100% pass rate in 291ms)**
-- `npm run build`: **Next.js 16.4.0 Turbopack production build compiled successfully with 0 errors**
-
 **Next Steps:**
-All milestones from Discovery through Deployment Readiness (Milestones 0 to 13) are complete, documented, tested, and synchronized on GitHub!
+Proceed to Milestone 14: Hands-Free Verbal-First Live Voice Interview Engine.
+
+---
+
+## Milestone 14: Hands-Free Verbal-First Live Voice Interview Engine & Speech Telemetry
+**Date:** 2026-10-27
+
+**Task Objective:**
+Deliver a hands-free, verbal-first live voice interview experience where candidate spoken speech is the primary input mode and code/text typing is secondary. The AI agent articulates the question aloud automatically upon session start and transitions to listening hands-free without candidate clicking, while supporting real-time conversational voice commands, dynamic audio volume visualization, and communication delivery analytics.
+
+**Files Created / Modified:**
+- `src/lib/voice/commands.ts` (Real-time conversational voice intent detection and transcript sanitization)
+- `src/lib/voice/__tests__/commands.test.ts` (6 unit tests verifying repeat, hint, submit, and clear voice command recognition)
+- `src/lib/voice/analytics.ts` (Candidate verbal delivery analytics: WPM, pacing category, filler words density, articulation clarity index, and coaching feedback)
+- `src/lib/voice/__tests__/analytics.test.ts` (5 unit tests verifying speech telemetry calculations)
+- `src/hooks/useLiveVoiceAgent.ts` (State machine managing voice transitions, auto-handoff, Socratic audio hints, and Web Audio API `AnalyserNode` microphone volume monitoring)
+- `src/app/interview/[id]/InterviewWorkspace.tsx` (Verbal-first workspace UI with glowing orb, dynamic 5-bar soundwave equalizer, voice command cues, delivery telemetry pill, and collapsible secondary typing accordion)
+- `src/app/interview/[id]/page.tsx` (Completed report badge and formatting for live verbal interview sessions)
+- `src/app/dashboard/DashboardAnalytics.tsx` (Added Live Voice session format indicator pill to interview cards)
+- `next.config.ts` (Configured `experimental.agentUpgrade: 'security'` with Next.js 16.4.3)
+
+**What was implemented:**
+1. **Hands-Free Conversational Voice State Machine**:
+   - The AI interviewer speaks the question prompt aloud via Web Speech API upon entering the question.
+   - Automatically transitions to microphone listening as soon as speech synthesis finishes, eliminating the need to click buttons.
+   - Natural conversational voice commands:
+     - *"Can you repeat the question?"* -> Interlocutor pauses listening and speaks question again.
+     - *"Give me a hint"* -> Automatically reveals the next Socratic hint and articulates it aloud.
+     - *"Submit my answer"* -> Verifies and submits candidate verbal response hands-free.
+     - *"Clear my answer"* -> Clears the transcribed buffer.
+2. **Real Web Audio Dynamic Equalizer**:
+   - Samples real candidate microphone audio amplitude using `AudioContext` and `createAnalyser()` with 64 FFT frequency bins.
+   - Powers a 5-bar soundwave visualizer that pulses in real-time according to vocal volume.
+3. **Real-Time Speech Delivery Analytics**:
+   - Calculates speaking pace (Words Per Minute) categorized into *Deliberate*, *Confident & Articulate*, or *Rapid*.
+   - Detects filler words (*um*, *uh*, *like*, *you know*, *basically*, *actually*) and computes filler density percentage.
+   - Generates an Articulation Clarity Score (out of 100) and actionable vocal coaching tips.
+   - Attaches speech telemetry directly to the answer payload for Ollama LLM evaluation.
+4. **Verbal-First Workspace Architecture**:
+   - Promoted the voice stage to the top of the interface.
+   - Demoted the Monaco code editor, test sandbox, and written notes into a secondary collapsible accordion for candidates who prefer typing.
+
+**Verification Results:**
+- `npm test`: **5 test files, 42 tests passed (100% pass rate)**
+- `npm run build`: **Next.js 16.4.3 Turbopack production build compiled with 0 errors**
+
 
 
 

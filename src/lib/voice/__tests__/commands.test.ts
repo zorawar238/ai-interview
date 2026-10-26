@@ -16,6 +16,18 @@ describe('Voice Commands Engine', () => {
     expect(detectVoiceCommand('Please clear the answer')).toBe('clear_answer')
   })
 
+  it('detects request hint intent variations', () => {
+    expect(detectVoiceCommand('Can you give me a hint?')).toBe('request_hint')
+    expect(detectVoiceCommand('I need a hint for this problem')).toBe('request_hint')
+    expect(detectVoiceCommand('Please provide a hint')).toBe('request_hint')
+  })
+
+  it('detects submit answer intent variations', () => {
+    expect(detectVoiceCommand('Submit my answer now')).toBe('submit_answer')
+    expect(detectVoiceCommand('I am done with my answer')).toBe('submit_answer')
+    expect(detectVoiceCommand('That is my answer, please submit')).toBe('submit_answer')
+  })
+
   it('returns null for non-command technical answers', () => {
     expect(
       detectVoiceCommand('We should use a hash map with two pointers for optimal O(N) complexity')
@@ -26,9 +38,9 @@ describe('Voice Commands Engine', () => {
   })
 
   it('sanitizes answer transcript by removing command phrases', () => {
-    const raw = 'Can you repeat the question? I will use a Redis cache with LRU eviction'
+    const raw = 'Can you give me a hint? I will use a Redis cache with LRU eviction'
     const cleaned = sanitizeAnswerTranscript(raw)
-    expect(cleaned).not.toContain('repeat the question')
+    expect(cleaned).not.toContain('give me a hint')
     expect(cleaned).toContain('I will use a Redis cache with LRU eviction')
   })
 })

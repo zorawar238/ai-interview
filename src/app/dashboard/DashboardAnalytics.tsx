@@ -609,6 +609,14 @@ export default function DashboardAnalytics({
                         {item.difficulty}
                       </span>
 
+                      {/* Interview Format Tag */}
+                      {item.interview_format === 'conversational' && (
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-purple-950/60 text-purple-300 border border-purple-800/60 font-mono flex items-center gap-1">
+                          <span>🎙️</span>
+                          <span>Live Voice</span>
+                        </span>
+                      )}
+
                       {/* Status Tag */}
                       <span
                         className={`text-xs px-2.5 py-0.5 rounded-full font-medium ${

@@ -323,11 +323,19 @@ export default async function InterviewSessionPage(props: {
                   </p>
 
                   {/* Candidate's Answer */}
-                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-4">
-                    <span className="text-xs uppercase tracking-wider text-zinc-400 font-semibold block mb-2">
-                      Your Submitted Answer:
-                    </span>
-                    <p className="text-sm text-zinc-300 whitespace-pre-wrap font-mono">
+                  <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-4 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs uppercase tracking-wider text-zinc-400 font-semibold block">
+                        Your Submitted Answer:
+                      </span>
+                      {matchedAnswer?.answer_text?.includes('Candidate Speech Delivery Telemetry') && (
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-800/80 flex items-center gap-1">
+                          <span>🎙️</span>
+                          <span>Live Verbal Session</span>
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed">
                       {matchedAnswer ? matchedAnswer.answer_text : 'No answer recorded.'}
                     </p>
                   </div>

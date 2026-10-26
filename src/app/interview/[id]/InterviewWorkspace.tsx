@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useState, useEffect, useTransition, useRef } from 'react'
+import React, { useState, useEffect, useTransition, useRef, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import { submitAnswerAction } from '../actions'
 import { useWebSpeech } from '@/hooks/useWebSpeech'
 import { useLiveVoiceAgent } from '@/hooks/useLiveVoiceAgent'
+import { analyzeSpeechDelivery } from '@/lib/voice/analytics'
 
 // Dynamically import Monaco Editor to avoid SSR window errors
 const Editor = dynamic(() => import('@monaco-editor/react'), {
@@ -246,6 +247,7 @@ export default function InterviewWorkspace({
 
   // 6. Submission Transition State
   const [isPending, startTransition] = useTransition()
+  const performSubmissionRef = useRef<() => void>(() => {})
 
   // 7. Live Hands-Free Conversational Voice Agent (Verbal-First Engine)
   const liveVoice = useLiveVoiceAgent({
@@ -259,7 +261,26 @@ export default function InterviewWorkspace({
     onClearAnswer: () => {
       setOralAnswer('')
     },
+    onRequestHint: () => {
+      if (hints && hints.length > revealedHintsCount) {
+        const nextHint = hints[revealedHintsCount]
+        setRevealedHintsCount((prev) => prev + 1)
+        setIsHintsOpen(true)
+        liveVoice.speakHintAloud(nextHint)
+      } else if (hints && hints.length > 0) {
+        liveVoice.speakHintAloud(hints[hints.length - 1])
+      }
+    },
+    onSubmitAnswer: () => {
+      performSubmissionRef.current()
+    },
   })
+
+  // Real-time verbal delivery analytics (WPM, pacing, filler words, clarity)
+  const speechAnalytics = useMemo(() => {
+    const elapsed = Math.max(durationMinutes * 60 - secondsRemaining, 1)
+    return analyzeSpeechDelivery(oralAnswer, elapsed)
+  }, [oralAnswer, secondsRemaining, durationMinutes])
 
   // Speech synthesis player for reading AI chat drawer responses
   const speechPlayer = useWebSpeech()
@@ -430,10 +451,8 @@ export default function InterviewWorkspace({
     }
   }
 
-  // Handle form submission
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-
+  // Submit candidate response
+  const executeSubmit = () => {
     // Aggregate oral response, code, sandbox execution output, and architectural notes
     let combinedAnswer = ''
     if (oralAnswer.trim()) {
@@ -454,7 +473,16 @@ export default function InterviewWorkspace({
       combinedAnswer += `\n### Sandbox Test Execution Output (stdout):\n\`\`\`\n${executionResult.stdout.trim()}\n\`\`\`\n`
     }
     if (textNotes.trim()) {
-      combinedAnswer += `\n### Architecture / Discussion Notes:\n${textNotes.trim()}`
+      combinedAnswer += `\n### Architecture / Discussion Notes:\n${textNotes.trim()}\n\n`
+    }
+
+    // Attach verbal speech delivery telemetry
+    if (oralAnswer.trim()) {
+      combinedAnswer += `### Candidate Speech Delivery Telemetry:\n`
+      combinedAnswer += `- Pacing: ${speechAnalytics.wordsPerMinute} WPM (${speechAnalytics.pacingRating})\n`
+      combinedAnswer += `- Verbal Fillers Detected: ${speechAnalytics.totalFillerCount} (${speechAnalytics.fillerDensityPercentage}% density)\n`
+      combinedAnswer += `- Articulation Clarity Score: ${speechAnalytics.clarityScore} / 100\n`
+      combinedAnswer += `- Delivery Feedback: ${speechAnalytics.actionableFeedback}\n`
     }
 
     if (!combinedAnswer.trim()) {
@@ -474,6 +502,16 @@ export default function InterviewWorkspace({
     startTransition(async () => {
       await submitAnswerAction(formData)
     })
+  }
+
+  useEffect(() => {
+    performSubmissionRef.current = executeSubmit
+  })
+
+  // Handle form submission
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    executeSubmit()
   }
 
   const isLowTime = secondsRemaining <= 300 // 5 minutes or less
@@ -784,28 +822,89 @@ export default function InterviewWorkspace({
           </div>
 
           {/* Real-time Voice Soundwave Animation */}
-          {(liveVoice.agentStatus === 'listening' || liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question') && (
-            <div className="flex items-center justify-center gap-1.5 py-2">
-              <div className={`w-1.5 rounded-full animate-pulse ${liveVoice.agentStatus === 'listening' ? 'bg-emerald-500 h-8' : 'bg-indigo-500 h-6'}`} />
-              <div className={`w-1.5 rounded-full animate-pulse delay-75 ${liveVoice.agentStatus === 'listening' ? 'bg-red-500 h-12' : 'bg-purple-500 h-10'}`} />
-              <div className={`w-1.5 rounded-full animate-pulse delay-150 ${liveVoice.agentStatus === 'listening' ? 'bg-indigo-500 h-5' : 'bg-indigo-500 h-4'}`} />
-              <div className={`w-1.5 rounded-full animate-pulse delay-100 ${liveVoice.agentStatus === 'listening' ? 'bg-emerald-500 h-10' : 'bg-purple-500 h-8'}`} />
-              <div className={`w-1.5 rounded-full animate-pulse delay-200 ${liveVoice.agentStatus === 'listening' ? 'bg-indigo-500 h-7' : 'bg-indigo-500 h-5'}`} />
-              <span className="text-xs font-mono text-zinc-400 ml-3">
-                {liveVoice.agentStatus === 'listening' ? 'Listening to your voice live...' : 'Agent speaking aloud...'}
-              </span>
+          {(liveVoice.agentStatus === 'listening' ||
+            liveVoice.agentStatus === 'speaking_question' ||
+            liveVoice.agentStatus === 'repeating_question' ||
+            liveVoice.agentStatus === 'speaking_hint') && (
+            <div className="flex items-center justify-center gap-2 py-2 px-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+              <div className="flex items-center gap-1.5 h-12">
+                {[
+                  { mult: 0.4, minH: 8, maxH: 36, defaultH: 14, bg: 'bg-emerald-500' },
+                  { mult: 0.55, minH: 12, maxH: 46, defaultH: 24, bg: 'bg-emerald-400' },
+                  { mult: 0.75, minH: 16, maxH: 54, defaultH: 34, bg: 'bg-indigo-400' },
+                  { mult: 0.5, minH: 12, maxH: 46, defaultH: 22, bg: 'bg-purple-400' },
+                  { mult: 0.35, minH: 8, maxH: 36, defaultH: 12, bg: 'bg-indigo-500' },
+                ].map((bar, i) => {
+                  const isListening = liveVoice.agentStatus === 'listening'
+                  const dynamicHeight = isListening
+                    ? Math.max(bar.minH, Math.min(bar.maxH, Math.round(liveVoice.micVolume * bar.mult + bar.minH)))
+                    : bar.defaultH
+
+                  return (
+                    <div
+                      key={i}
+                      style={{ height: `${dynamicHeight}px` }}
+                      className={`w-1.5 rounded-full transition-all duration-75 ${
+                        isListening
+                          ? bar.bg
+                          : 'bg-indigo-500 animate-pulse'
+                      }`}
+                    />
+                  )
+                })}
+              </div>
+
+              <div className="flex items-center gap-2 ml-3">
+                <span className="text-xs font-mono text-zinc-300">
+                  {liveVoice.agentStatus === 'listening'
+                    ? liveVoice.micVolume > 5
+                      ? '🎙️ Speaking...'
+                      : 'Microphone Live • Speak your answer...'
+                    : liveVoice.agentStatus === 'speaking_hint'
+                    ? 'Interviewer reading Socratic hint aloud...'
+                    : liveVoice.agentStatus === 'repeating_question'
+                    ? 'Interviewer repeating question aloud...'
+                    : 'Interviewer articulating question aloud...'}
+                </span>
+                {liveVoice.agentStatus === 'listening' && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-zinc-900 text-zinc-400 border border-zinc-800">
+                    Mic Vol: {liveVoice.micVolume}%
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
           {/* Conversational Voice Commands Hint Banner */}
-          <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-900/40 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-2 text-indigo-300">
-              <span>💡</span>
-              <span className="font-semibold text-white">Live Conversational Voice Commands:</span>
-              <span className="text-zinc-300">Say <strong className="text-indigo-200 font-mono">&quot;Can you repeat the question?&quot;</strong> anytime to hear it repeated aloud.</span>
+          <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-900/40 space-y-2 text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-indigo-300">
+                <span>💡</span>
+                <span className="font-semibold text-white">Live Voice Commands (Hands-Free):</span>
+                <span className="text-zinc-300">Speak naturally — no clicking needed!</span>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-900/40 text-indigo-200 border border-indigo-800/60">
+                Microphone Active
+              </span>
             </div>
-            <div className="flex items-center gap-2 text-zinc-400 text-[11px] font-mono">
-              <span>Say: &quot;Clear my answer&quot; to reset</span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 pt-1 text-[11px] font-mono">
+              <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-2">
+                <span className="text-indigo-400">🔄</span>
+                <span>Say: <strong className="text-white">&quot;Repeat question&quot;</strong></span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-2">
+                <span className="text-amber-400">💡</span>
+                <span>Say: <strong className="text-white">&quot;Give me a hint&quot;</strong></span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-2">
+                <span className="text-emerald-400">🚀</span>
+                <span>Say: <strong className="text-white">&quot;Submit my answer&quot;</strong></span>
+              </div>
+              <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-2">
+                <span className="text-rose-400">🗑️</span>
+                <span>Say: <strong className="text-white">&quot;Clear my answer&quot;</strong></span>
+              </div>
             </div>
           </div>
 
@@ -857,6 +956,63 @@ export default function InterviewWorkspace({
               {oralAnswer.trim() ? `${oralAnswer.trim().split(/\s+/).length} words` : '0 words'}
             </div>
           </div>
+
+          {/* Real-Time Verbal Communication & Speech Telemetry Bar */}
+          {oralAnswer.trim().length > 0 && (
+            <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex flex-wrap items-center gap-3">
+                {/* Clarity Score Gauge */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-500 text-[11px] font-mono">Clarity:</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-md font-mono font-bold text-xs ${
+                      speechAnalytics.clarityScore >= 80
+                        ? 'bg-emerald-950/80 text-emerald-300 border border-emerald-800'
+                        : speechAnalytics.clarityScore >= 60
+                        ? 'bg-amber-950/80 text-amber-300 border border-amber-800'
+                        : 'bg-rose-950/80 text-rose-300 border border-rose-800'
+                    }`}
+                  >
+                    {speechAnalytics.clarityScore}/100
+                  </span>
+                </div>
+
+                {/* Pacing Rating */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-500 text-[11px] font-mono">Pacing:</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium ${
+                      speechAnalytics.pacingRating === 'Confident & Articulate'
+                        ? 'bg-indigo-950/80 text-indigo-300 border border-indigo-800'
+                        : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                    }`}
+                  >
+                    {speechAnalytics.wordsPerMinute} WPM • {speechAnalytics.pacingRating}
+                  </span>
+                </div>
+
+                {/* Filler Words */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-zinc-500 text-[11px] font-mono">Fillers:</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-md font-mono text-[11px] ${
+                      speechAnalytics.totalFillerCount === 0
+                        ? 'text-emerald-400 bg-emerald-950/40 border border-emerald-900/60'
+                        : 'text-amber-400 bg-amber-950/40 border border-amber-900/60'
+                    }`}
+                  >
+                    {speechAnalytics.totalFillerCount} {speechAnalytics.totalFillerCount === 1 ? 'filler' : 'fillers'} ({speechAnalytics.fillerDensityPercentage}%)
+                  </span>
+                </div>
+              </div>
+
+              {/* Delivery Coach Tip */}
+              <div className="text-[11px] text-zinc-400 italic flex items-center gap-1.5 max-w-md">
+                <span className="text-indigo-400 not-italic">🗣️ Tip:</span>
+                <span>{speechAnalytics.actionableFeedback}</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
