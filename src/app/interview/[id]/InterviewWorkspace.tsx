@@ -324,10 +324,17 @@ export default function InterviewWorkspace({
 
   // Attempt auto-start hands-free audio conversation on mount / question transition
   useEffect(() => {
-    const timer = setTimeout(() => {
-      liveVoice.startLiveSession()
-    }, 600)
-    return () => clearTimeout(timer)
+    const hasUserActivated =
+      typeof navigator !== 'undefined' && (navigator as { userActivation?: { hasBeenActive: boolean } }).userActivation
+        ? (navigator as { userActivation?: { hasBeenActive: boolean } }).userActivation?.hasBeenActive
+        : false
+
+    if (hasUserActivated || questionNumber > 1) {
+      const timer = setTimeout(() => {
+        liveVoice.startLiveSession()
+      }, 600)
+      return () => clearTimeout(timer)
+    }
   }, [questionNumber])
 
   // Cleanly stop audio on unmount
@@ -586,6 +593,8 @@ export default function InterviewWorkspace({
                 onClick={() => {
                   if (liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question') {
                     liveVoice.stopAll()
+                  } else if (!liveVoice.isStarted) {
+                    liveVoice.startLiveSession()
                   } else {
                     liveVoice.triggerRepeat()
                   }
@@ -822,6 +831,11 @@ export default function InterviewWorkspace({
                       Microphone Paused
                     </span>
                   )}
+                  {liveVoice.agentStatus === 'idle' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700 text-xs font-mono">
+                      Voice Standby • Ready
+                    </span>
+                  )}
                 </div>
 
                 <p className="text-xs text-zinc-300 mt-1.5">
@@ -829,7 +843,9 @@ export default function InterviewWorkspace({
                     ? 'Listen carefully. Your microphone will automatically open as soon as the interviewer finishes speaking.'
                     : liveVoice.agentStatus === 'listening'
                     ? 'Speak your technical reasoning, system design, or algorithm aloud. It transcribes live below.'
-                    : 'Click resume to continue voice conversation.'}
+                    : liveVoice.agentStatus === 'paused'
+                    ? 'Microphone paused. Click Resume Mic to continue speaking.'
+                    : 'Voice agent ready. Click Repeat to hear the question or Resume Mic to speak hands-free.'}
                 </p>
 
                 {liveVoice.commandNotice && (

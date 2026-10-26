@@ -36,6 +36,8 @@ declare global {
 const emptySubscribe = () => () => {}
 const emptyVoices: SpeechSynthesisVoice[] = []
 let cachedVoices: SpeechSynthesisVoice[] = emptyVoices
+// Retain module-level active utterance reference to prevent Chromium V8 garbage collection
+let globalActiveUtterance: SpeechSynthesisUtterance | null = null
 
 function areVoicesEqual(a: SpeechSynthesisVoice[], b: SpeechSynthesisVoice[]): boolean {
   if (a === b) return true
@@ -265,13 +267,24 @@ export function useWebSpeech(options: UseWebSpeechOptions = {}) {
       onFinished?: () => void,
       customOptions?: { rate?: number; pitch?: number; voiceName?: string }
     ) => {
-      if (typeof window === 'undefined' || !('speechSynthesis' in window)) return
+      if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+        if (onFinished) onFinished()
+        return
+      }
 
-      // Cancel previous speech immediately
-      window.speechSynthesis.cancel()
+      // Resume if previously stuck in paused state
+      try {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume()
+        }
+        window.speechSynthesis.cancel()
+      } catch {}
 
       const cleaned = sanitizeTextForSpeech(textToSpeak)
-      if (!cleaned) return
+      if (!cleaned) {
+        if (onFinished) onFinished()
+        return
+      }
 
       const utterance = new SpeechSynthesisUtterance(cleaned)
       utterance.lang = preferredLanguage
@@ -279,21 +292,22 @@ export function useWebSpeech(options: UseWebSpeechOptions = {}) {
       utterance.pitch = customOptions?.pitch ?? defaultPitch
 
       // Pick selected or preferred English voice if available
-      if (voices.length > 0) {
+      const availableVoices = voices.length > 0 ? voices : window.speechSynthesis.getVoices()
+      if (availableVoices && availableVoices.length > 0) {
         const targetVoiceName = customOptions?.voiceName || preferredVoiceName
         let selectedVoice: SpeechSynthesisVoice | undefined
         if (targetVoiceName) {
-          selectedVoice = voices.find((v) => v.name === targetVoiceName)
+          selectedVoice = availableVoices.find((v) => v.name === targetVoiceName)
         }
         if (!selectedVoice) {
           selectedVoice =
-            voices.find(
+            availableVoices.find(
               (v) =>
                 v.lang.startsWith('en') &&
                 (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural'))
             ) ||
-            voices.find((v) => v.lang.startsWith('en')) ||
-            voices[0]
+            availableVoices.find((v) => v.lang.startsWith('en')) ||
+            availableVoices[0]
         }
 
         if (selectedVoice) {
@@ -301,24 +315,62 @@ export function useWebSpeech(options: UseWebSpeechOptions = {}) {
         }
       }
 
+      globalActiveUtterance = utterance
+
+      let hasCleanedUp = false
+      let resumeInterval: ReturnType<typeof setInterval> | null = null
+
+      const cleanup = () => {
+        if (hasCleanedUp) return
+        hasCleanedUp = true
+        if (resumeInterval) {
+          clearInterval(resumeInterval)
+          resumeInterval = null
+        }
+        globalActiveUtterance = null
+        setIsSpeaking(false)
+        setCurrentSpeakingText(null)
+      }
+
       utterance.onstart = () => {
         setIsSpeaking(true)
         setCurrentSpeakingText(textToSpeak)
+
+        // Workaround for Chromium timer issue on long utterances
+        resumeInterval = setInterval(() => {
+          if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+            if (window.speechSynthesis.speaking) {
+              window.speechSynthesis.pause()
+              window.speechSynthesis.resume()
+            } else if (resumeInterval) {
+              clearInterval(resumeInterval)
+              resumeInterval = null
+            }
+          }
+        }, 12000)
       }
 
       utterance.onend = () => {
-        setIsSpeaking(false)
-        setCurrentSpeakingText(null)
+        cleanup()
         if (onFinished) onFinished()
       }
 
       utterance.onerror = (e) => {
-        console.warn('Speech synthesis utterance error:', e)
-        setIsSpeaking(false)
-        setCurrentSpeakingText(null)
+        cleanup()
+        console.warn('Speech synthesis utterance event notice:', e)
+        if (onFinished) onFinished()
       }
 
-      window.speechSynthesis.speak(utterance)
+      try {
+        window.speechSynthesis.speak(utterance)
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume()
+        }
+      } catch (err) {
+        console.error('Failed to speak utterance:', err)
+        cleanup()
+        if (onFinished) onFinished()
+      }
     },
     [preferredLanguage, defaultRate, defaultPitch, preferredVoiceName, voices]
   )
@@ -327,6 +379,7 @@ export function useWebSpeech(options: UseWebSpeechOptions = {}) {
   const stopSpeaking = useCallback(() => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       window.speechSynthesis.cancel()
+      globalActiveUtterance = null
       setIsSpeaking(false)
       setCurrentSpeakingText(null)
     }

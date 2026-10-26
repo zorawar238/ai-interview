@@ -88,14 +88,21 @@ export function useLiveVoiceAgent({
     onAskClarificationRef.current = onAskClarification
   }, [onAskClarification])
 
+  const handleCandidateSpokenPhraseRef = useRef<(phrase: string) => void>(() => {})
+
   // Dedicated speech synthesis player
   const speech = useWebSpeech({
     defaultRate: speechRate,
     defaultPitch: speechPitch,
     preferredVoiceName: selectedVoiceName,
     onTranscript: (spokenPhrase) => {
-      handleCandidateSpokenPhrase(spokenPhrase)
+      handleCandidateSpokenPhraseRef.current(spokenPhrase)
     },
+  })
+
+  const speechRef = useRef(speech)
+  useEffect(() => {
+    speechRef.current = speech
   })
 
   // Full introductory text to speak
@@ -173,44 +180,44 @@ export function useLiveVoiceAgent({
   const beginListeningHandsFree = useCallback(() => {
     setAgentStatus('listening')
     setCommandNotice(null)
-    speech.startListening()
+    speechRef.current.startListening()
     startAudioVolumeMonitoring()
-  }, [speech, startAudioVolumeMonitoring])
+  }, [startAudioVolumeMonitoring])
 
   // Speak Socratic hint aloud
   const speakHintAloud = useCallback(
     (hintText: string) => {
-      speech.stopListening()
+      speechRef.current.stopListening()
       stopAudioVolumeMonitoring()
       setAgentStatus('speaking_hint')
       setCommandNotice('Interviewer reading Socratic hint aloud...')
 
-      speech.speak(`Here is a hint: ${hintText}`, () => {
+      speechRef.current.speak(`Here is a hint: ${hintText}`, () => {
         beginListeningHandsFree()
       })
     },
-    [speech, stopAudioVolumeMonitoring, beginListeningHandsFree]
+    [stopAudioVolumeMonitoring, beginListeningHandsFree]
   )
 
   // Speak clarifying response aloud
   const speakClarificationAloud = useCallback(
     (clarificationText: string) => {
-      speech.stopListening()
+      speechRef.current.stopListening()
       stopAudioVolumeMonitoring()
       setAgentStatus('speaking_clarification')
       setCommandNotice('Interviewer answering clarification...')
 
-      speech.speak(clarificationText, () => {
+      speechRef.current.speak(clarificationText, () => {
         beginListeningHandsFree()
       })
     },
-    [speech, stopAudioVolumeMonitoring, beginListeningHandsFree]
+    [stopAudioVolumeMonitoring, beginListeningHandsFree]
   )
 
   // Articulate question and then auto-transition to listening
   const speakQuestionAndListen = useCallback(
     (isRepeat = false) => {
-      speech.stopListening()
+      speechRef.current.stopListening()
       stopAudioVolumeMonitoring()
 
       if (isRepeat) {
@@ -225,11 +232,11 @@ export function useLiveVoiceAgent({
         ? `Certainly! Let me repeat the question: ${prompt}`
         : questionIntroText
 
-      speech.speak(spokenContent, () => {
+      speechRef.current.speak(spokenContent, () => {
         beginListeningHandsFree()
       })
     },
-    [speech, prompt, questionIntroText, stopAudioVolumeMonitoring, beginListeningHandsFree]
+    [prompt, questionIntroText, stopAudioVolumeMonitoring, beginListeningHandsFree]
   )
 
   // Process candidate spoken phrase for commands or answer text
@@ -275,10 +282,10 @@ export function useLiveVoiceAgent({
 
       if (command === 'submit_answer') {
         setCommandNotice('Command detected: "Submit Answer"')
-        speech.stopListening()
+        speechRef.current.stopListening()
         stopAudioVolumeMonitoring()
         setAgentStatus('submitting')
-        speech.speak('Submitting your verbal answer for evaluation.', () => {
+        speechRef.current.speak('Submitting your verbal answer for evaluation.', () => {
           if (onSubmitAnswerRef.current) {
             onSubmitAnswerRef.current()
           }
@@ -301,8 +308,12 @@ export function useLiveVoiceAgent({
         onTranscriptRef.current(cleaned)
       }
     },
-    [speakQuestionAndListen, speech, stopAudioVolumeMonitoring]
+    [speakQuestionAndListen, stopAudioVolumeMonitoring]
   )
+
+  useEffect(() => {
+    handleCandidateSpokenPhraseRef.current = handleCandidateSpokenPhrase
+  }, [handleCandidateSpokenPhrase])
 
   // Start live session (can be triggered by click or auto)
   const startLiveSession = useCallback(() => {
@@ -320,22 +331,27 @@ export function useLiveVoiceAgent({
   // Pause / resume listening
   const toggleListeningPause = useCallback(() => {
     if (agentStatus === 'listening') {
-      speech.stopListening()
+      speechRef.current.stopListening()
       stopAudioVolumeMonitoring()
       setAgentStatus('paused')
-    } else if (agentStatus === 'paused') {
+    } else {
       beginListeningHandsFree()
     }
-  }, [agentStatus, speech, stopAudioVolumeMonitoring, beginListeningHandsFree])
+  }, [agentStatus, stopAudioVolumeMonitoring, beginListeningHandsFree])
 
   // Stop everything
   const stopAll = useCallback(() => {
-    speech.stopSpeaking()
-    speech.stopListening()
+    speechRef.current.stopSpeaking()
+    speechRef.current.stopListening()
     stopAudioVolumeMonitoring()
     setAgentStatus('idle')
     setCommandNotice(null)
-  }, [speech, stopAudioVolumeMonitoring])
+  }, [stopAudioVolumeMonitoring])
+
+  const stopAllRef = useRef(stopAll)
+  useEffect(() => {
+    stopAllRef.current = stopAll
+  })
 
   // When question changes, automatically speak the new question if already started
   useEffect(() => {
@@ -345,12 +361,12 @@ export function useLiveVoiceAgent({
     }
   }, [questionNumber, isStarted, speakQuestionAndListen])
 
-  // Cleanup on unmount
+  // Cleanup on unmount ONLY
   useEffect(() => {
     return () => {
-      stopAll()
+      stopAllRef.current()
     }
-  }, [stopAll])
+  }, [])
 
   return {
     agentStatus,
