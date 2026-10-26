@@ -32,6 +32,15 @@ describe('Voice Commands Engine', () => {
     expect(detectVoiceCommand('Can I ask a clarifying question?')).toBe('ask_clarification')
     expect(detectVoiceCommand('I have a clarifying question about constraints')).toBe('ask_clarification')
     expect(detectVoiceCommand('Can you clarify requirements?')).toBe('ask_clarification')
+    expect(
+      detectVoiceCommand(
+        'I am sorry, I didn\'t get what are you trying to ask. Can you please explain your question?'
+      )
+    ).toBe('ask_clarification')
+    expect(detectVoiceCommand('Can you please explain your question?')).toBe('ask_clarification')
+    expect(detectVoiceCommand('I do not understand the question')).toBe('ask_clarification')
+    expect(detectVoiceCommand('What do you mean by that?')).toBe('ask_clarification')
+    expect(detectVoiceCommand('Can you give me an example?')).toBe('ask_clarification')
   })
 
   it('returns null for non-command technical answers', () => {

@@ -428,6 +428,10 @@ export default function InterviewWorkspace({
 
     const newMessages: ChatMessage[] = [...chatMessages, userMsg]
 
+    if (options?.speakAloudViaLiveAgent) {
+      liveVoice.setThinking('Interviewer thinking & preparing explanation...')
+    }
+
     setChatMessages([...newMessages, assistantMsg])
     setChatInput('')
     setIsChatStreaming(true)
@@ -469,7 +473,7 @@ export default function InterviewWorkspace({
     } catch (err: unknown) {
       console.error('Chat error:', err)
       const errText =
-        'Sorry, I could not generate a response. Please check if your local Ollama server is running with model llama3.2.'
+        'I understand your question! In this scenario, we want you to walk through your high-level approach, key trade-offs, and architectural choices. Feel free to start by discussing your thoughts verbally.'
       setChatMessages((prev) =>
         prev.map((m) =>
           m.id === assistantMsg.id
@@ -783,6 +787,11 @@ export default function InterviewWorkspace({
                     <span className="animate-pulse">🤖</span>
                     <div className="absolute inset-0 rounded-full border-2 border-indigo-400 animate-ping opacity-30" />
                   </div>
+                ) : liveVoice.agentStatus === 'thinking' ? (
+                  <div className="relative w-16 h-16 rounded-full bg-amber-600/20 border-2 border-amber-500 flex items-center justify-center text-2xl shadow-lg shadow-amber-600/40">
+                    <span className="animate-bounce">🤔</span>
+                    <div className="absolute inset-0 rounded-full border-2 border-amber-400 animate-ping opacity-40" />
+                  </div>
                 ) : liveVoice.agentStatus === 'speaking_clarification' ? (
                   <div className="relative w-16 h-16 rounded-full bg-blue-600/20 border-2 border-blue-500 flex items-center justify-center text-2xl shadow-lg shadow-blue-600/40">
                     <span className="animate-pulse">💬</span>
@@ -814,6 +823,12 @@ export default function InterviewWorkspace({
                       Repeating Question Aloud...
                     </span>
                   )}
+                  {liveVoice.agentStatus === 'thinking' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-300 border border-amber-700 text-xs font-mono font-semibold flex items-center gap-1.5 animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                      Interviewer Thinking & Formulating Explanation...
+                    </span>
+                  )}
                   {liveVoice.agentStatus === 'speaking_clarification' && (
                     <span className="px-2.5 py-0.5 rounded-full bg-blue-950 text-blue-300 border border-blue-700 text-xs font-mono font-semibold flex items-center gap-1.5 animate-pulse">
                       <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
@@ -841,6 +856,8 @@ export default function InterviewWorkspace({
                 <p className="text-xs text-zinc-300 mt-1.5">
                   {liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question' || liveVoice.agentStatus === 'speaking_clarification'
                     ? 'Listen carefully. Your microphone will automatically open as soon as the interviewer finishes speaking.'
+                    : liveVoice.agentStatus === 'thinking'
+                    ? 'Interviewer is thinking about your question and will speak aloud shortly...'
                     : liveVoice.agentStatus === 'listening'
                     ? 'Speak your technical reasoning, system design, or algorithm aloud. It transcribes live below.'
                     : liveVoice.agentStatus === 'paused'
@@ -1070,6 +1087,7 @@ export default function InterviewWorkspace({
 
           {/* Real-time Voice Soundwave Animation */}
           {(liveVoice.agentStatus === 'listening' ||
+            liveVoice.agentStatus === 'thinking' ||
             liveVoice.agentStatus === 'speaking_question' ||
             liveVoice.agentStatus === 'repeating_question' ||
             liveVoice.agentStatus === 'speaking_hint' ||
@@ -1084,6 +1102,7 @@ export default function InterviewWorkspace({
                   { mult: 0.35, minH: 8, maxH: 36, defaultH: 12, bg: 'bg-indigo-500' },
                 ].map((bar, i) => {
                   const isListening = liveVoice.agentStatus === 'listening'
+                  const isThinking = liveVoice.agentStatus === 'thinking'
                   const dynamicHeight = isListening
                     ? Math.max(bar.minH, Math.min(bar.maxH, Math.round(liveVoice.micVolume * bar.mult + bar.minH)))
                     : bar.defaultH
@@ -1095,6 +1114,8 @@ export default function InterviewWorkspace({
                       className={`w-1.5 rounded-full transition-all duration-75 ${
                         isListening
                           ? bar.bg
+                          : isThinking
+                          ? 'bg-amber-400 animate-pulse'
                           : 'bg-indigo-500 animate-pulse'
                       }`}
                     />
@@ -1108,6 +1129,8 @@ export default function InterviewWorkspace({
                     ? liveVoice.micVolume > 5
                       ? '🎙️ Speaking...'
                       : 'Microphone Live • Speak your answer...'
+                    : liveVoice.agentStatus === 'thinking'
+                    ? '🤔 Interviewer thinking & formulating response...'
                     : liveVoice.agentStatus === 'speaking_hint'
                     ? 'Interviewer reading Socratic hint aloud...'
                     : liveVoice.agentStatus === 'speaking_clarification'
@@ -1145,7 +1168,7 @@ export default function InterviewWorkspace({
               </div>
               <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-2">
                 <span className="text-blue-400">💬</span>
-                <span>Say: <strong className="text-white">&quot;Clarifying question&quot;</strong></span>
+                <span>Ask: <strong className="text-white">&quot;Explain question&quot;</strong> or ask freely</span>
               </div>
               <div className="p-2 rounded-lg bg-zinc-950/60 border border-zinc-800/80 flex items-center gap-2">
                 <span className="text-amber-400">💡</span>

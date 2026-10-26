@@ -11,6 +11,7 @@ export type VoiceAgentStatus =
   | 'repeating_question'
   | 'speaking_hint'
   | 'speaking_clarification'
+  | 'thinking'
   | 'submitting'
   | 'paused'
 
@@ -271,11 +272,14 @@ export function useLiveVoiceAgent({
       if (command === 'ask_clarification') {
         if (!isClarifyingRef.current && onAskClarificationRef.current) {
           isClarifyingRef.current = true
-          setCommandNotice('Command detected: "Clarifying Question"')
+          speechRef.current.stopListening()
+          stopAudioVolumeMonitoring()
+          setAgentStatus('thinking')
+          setCommandNotice('Interviewer thinking & preparing explanation...')
           onAskClarificationRef.current(spokenText)
           setTimeout(() => {
             isClarifyingRef.current = false
-          }, 4000)
+          }, 6000)
         }
         return
       }
@@ -327,6 +331,17 @@ export function useLiveVoiceAgent({
   const triggerRepeat = useCallback(() => {
     speakQuestionAndListen(true)
   }, [speakQuestionAndListen])
+
+  // Explicitly enter thinking state
+  const setThinking = useCallback(
+    (notice = 'Interviewer thinking & preparing explanation...') => {
+      speechRef.current.stopListening()
+      stopAudioVolumeMonitoring()
+      setAgentStatus('thinking')
+      setCommandNotice(notice)
+    },
+    [stopAudioVolumeMonitoring]
+  )
 
   // Pause / resume listening
   const toggleListeningPause = useCallback(() => {
@@ -381,6 +396,7 @@ export function useLiveVoiceAgent({
     voices: speech.voices,
     startLiveSession,
     triggerRepeat,
+    setThinking,
     speakHintAloud,
     speakClarificationAloud,
     toggleListeningPause,

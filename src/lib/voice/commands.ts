@@ -21,6 +21,11 @@ const REPEAT_PATTERNS = [
   'read the question again',
   'repeat that please',
   'repeat please',
+  'can you say that again',
+  'could you say that again',
+  'what did you ask',
+  'come again',
+  'pardon me',
 ]
 
 const CLEAR_PATTERNS = [
@@ -42,6 +47,10 @@ const HINT_PATTERNS = [
   'read hint',
   'what is the hint',
   'unlock hint',
+  'i am stuck',
+  'i am completely stuck',
+  'give me a clue',
+  'can you help me start',
 ]
 
 const SUBMIT_PATTERNS = [
@@ -55,7 +64,7 @@ const SUBMIT_PATTERNS = [
   'submit and next',
 ]
 
-const CLARIFY_PATTERNS = [
+const CLARIFY_PHRASE_PATTERNS = [
   'clarifying question',
   'clarify the question',
   'can i ask a clarifying question',
@@ -65,6 +74,69 @@ const CLARIFY_PATTERNS = [
   'clarify the constraints',
   'clarify requirements',
   'quick question for you',
+  'quick question',
+  'explain your question',
+  'explain the question',
+  'explain this question',
+  'explain the problem',
+  'explain this problem',
+  'can you explain your question',
+  'could you explain your question',
+  'can you please explain your question',
+  'could you please explain your question',
+  'can you please explain',
+  'could you please explain',
+  'can you explain the problem',
+  'what are you trying to ask',
+  'what are you asking',
+  'what do you mean by that',
+  'what do you mean',
+  'what does that mean',
+  'what does this mean',
+  'i do not understand the question',
+  'i do not understand',
+  'i don\'t understand',
+  'i didn\'t understand',
+  'i did not understand',
+  'i didn\'t get what you are trying to ask',
+  'i didn\'t get what you are asking',
+  'i didn\'t get what you\'re asking',
+  'didn\'t get what are you trying to ask',
+  'didn\'t get what you are trying to ask',
+  'didn\'t get what you are asking',
+  'didn\'t get what you\'re asking',
+  'i didn\'t get it',
+  'i don\'t get it',
+  'can you clarify',
+  'could you clarify',
+  'please clarify',
+  'can you elaborate',
+  'could you elaborate',
+  'please elaborate',
+  'can you give me an example',
+  'can you give an example',
+  'give me an example',
+  'give an example',
+  'what are the constraints',
+  'what are the requirements',
+  'can we assume',
+  'should i assume',
+  'should we assume',
+  'what is the expected input',
+  'what is the expected output',
+  'help me understand the question',
+  'help me understand',
+]
+
+const CLARIFY_REGEX_PATTERNS = [
+  /(didn't|don't|did not|do not)\s+(get|understand|comprehend|catch)\s+(what|the)/i,
+  /(can|could|would|will)\s+you\s+(please\s+)?(explain|clarify|elaborate|describe)/i,
+  /(please\s+)?(explain|clarify|elaborate\s+on)\s+(the|your|this)\s+(question|problem|scenario|requirements?|constraints?)/i,
+  /(what|how)\s+(do|did)\s+you\s+mean/i,
+  /what\s+are\s+you\s+(trying\s+to\s+)?ask/i,
+  /(can\s+you\s+)?(give|provide)\s+(me\s+)?(an?\s+)?example/i,
+  /what('s|\s+are|\s+is)\s+the\s+(constraints?|requirements?|inputs?|outputs?)/i,
+  /(can|should|may)\s+(i|we)\s+(assume|use)\b/i,
 ]
 
 /**
@@ -92,15 +164,21 @@ export function detectVoiceCommand(phrase: string): VoiceCommand {
     }
   }
 
-  for (const pattern of CLARIFY_PATTERNS) {
+  for (const pattern of CLEAR_PATTERNS) {
+    if (normalized.includes(pattern)) {
+      return 'clear_answer'
+    }
+  }
+
+  for (const pattern of CLARIFY_PHRASE_PATTERNS) {
     if (normalized.includes(pattern)) {
       return 'ask_clarification'
     }
   }
 
-  for (const pattern of CLEAR_PATTERNS) {
-    if (normalized.includes(pattern)) {
-      return 'clear_answer'
+  for (const regex of CLARIFY_REGEX_PATTERNS) {
+    if (regex.test(normalized)) {
+      return 'ask_clarification'
     }
   }
 
@@ -117,12 +195,13 @@ export function sanitizeAnswerTranscript(text: string): string {
     ...REPEAT_PATTERNS,
     ...HINT_PATTERNS,
     ...SUBMIT_PATTERNS,
-    ...CLARIFY_PATTERNS,
+    ...CLARIFY_PHRASE_PATTERNS,
     ...CLEAR_PATTERNS,
   ]
 
   for (const pattern of allPatterns) {
-    const regex = new RegExp(`\\b${pattern}\\b`, 'gi')
+    const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const regex = new RegExp(`\\b${escaped}\\b`, 'gi')
     cleaned = cleaned.replace(regex, '')
   }
 
