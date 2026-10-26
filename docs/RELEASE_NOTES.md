@@ -42,14 +42,14 @@ Built with **Next.js 16**, **React 19**, **Supabase**, and local **Ollama** infe
 
 ### 6. Automated Regression Testing Suite
 - Integrated **Vitest** test runner with native ESM and `@/*` path resolution.
-- **29 automated tests** covering adaptive mathematical thresholds, sandbox payload bounds, and Zod runtime schema contracts.
+- **31 automated tests** covering adaptive mathematical thresholds, sandbox payload bounds, and Zod runtime schema contracts.
 
 ---
 
 ## Verification & Metrics
 
-- **Unit & Contract Tests:** `29/29 passed (100% in 281ms)`
-- **Turbopack Build:** `Next.js 16.4.0 production build successful with 0 errors`
+- **Unit & Contract Tests:** `31/31 passed (100% in 477ms)`
+- **Turbopack Build:** `Next.js 16.4.3 production build successful with 0 errors`
 - **Cost:** `₹0 / $0 recurring API expense` via local Ollama inference
 - **Security:** Strict Supabase Row-Level Security (RLS) policies on all database tables
 
