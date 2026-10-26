@@ -4,6 +4,7 @@ import React, { useState, useEffect, useTransition, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { submitAnswerAction } from '../actions'
 import { useWebSpeech } from '@/hooks/useWebSpeech'
+import { useLiveVoiceAgent } from '@/hooks/useLiveVoiceAgent'
 
 // Dynamically import Monaco Editor to avoid SSR window errors
 const Editor = dynamic(() => import('@monaco-editor/react'), {
@@ -210,9 +211,8 @@ export default function InterviewWorkspace({
   const [code, setCode] = useState(LANGUAGE_TEMPLATES[initialLanguage] || LANGUAGE_TEMPLATES.typescript)
   const [textNotes, setTextNotes] = useState('')
   const [oralAnswer, setOralAnswer] = useState('')
-  const [activeTab, setActiveTab] = useState<'oral' | 'notes' | 'code'>(
-    isConversationalMode ? 'oral' : 'code'
-  )
+  const [activeTab, setActiveTab] = useState<'code' | 'notes'>('code')
+  const [showSecondaryTyping, setShowSecondaryTyping] = useState(!isConversationalMode)
 
   // 2. Hints State
   const [revealedHintsCount, setRevealedHintsCount] = useState(0)
@@ -247,19 +247,24 @@ export default function InterviewWorkspace({
   // 6. Submission Transition State
   const [isPending, startTransition] = useTransition()
 
-  // 7. Web Speech (Audio Interviewer & Dictation)
-  const [autoSpeakAssistant, setAutoSpeakAssistant] = useState(false)
-  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
-
-  // Speech synthesis player for reading questions and assistant responses
-  const speechPlayer = useWebSpeech()
-
-  // Speech-to-text dictation for Candidate Oral Answer
-  const oralSpeech = useWebSpeech({
-    onTranscript: (spokenText) => {
-      setOralAnswer((prev) => (prev ? `${prev} ${spokenText}` : spokenText))
+  // 7. Live Hands-Free Conversational Voice Agent (Verbal-First Engine)
+  const liveVoice = useLiveVoiceAgent({
+    questionNumber,
+    totalQuestions,
+    topic,
+    prompt,
+    onTranscriptUpdate: (transcribedChunk) => {
+      setOralAnswer((prev) => (prev ? `${prev} ${transcribedChunk}` : transcribedChunk))
+    },
+    onClearAnswer: () => {
+      setOralAnswer('')
     },
   })
+
+  // Speech synthesis player for reading AI chat drawer responses
+  const speechPlayer = useWebSpeech()
+  const [autoSpeakAssistant, setAutoSpeakAssistant] = useState(false)
+  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null)
 
   // Speech-to-text dictation for Architecture Notes
   const notesSpeech = useWebSpeech({
@@ -275,6 +280,14 @@ export default function InterviewWorkspace({
     },
   })
 
+  // Attempt auto-start hands-free audio conversation on mount / question transition
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      liveVoice.startLiveSession()
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [questionNumber])
+
   // Cleanly stop audio on unmount
   useEffect(() => {
     return () => {
@@ -283,14 +296,6 @@ export default function InterviewWorkspace({
       }
     }
   }, [])
-
-  const handleToggleQuestionAudio = () => {
-    if (speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt)) {
-      speechPlayer.stopSpeaking()
-    } else {
-      speechPlayer.speak(`Question ${questionNumber} of ${totalQuestions} in ${topic}. ${prompt}`)
-    }
-  }
 
   const handleToggleMessageAudio = (msgId: string, content: string) => {
     if (speechPlayer.isSpeaking && speakingMessageId === msgId) {
@@ -502,20 +507,30 @@ export default function InterviewWorkspace({
           </div>
 
           <div className="flex items-center gap-3">
-            {/* Audio Interviewer Read Aloud Button */}
-            {speechPlayer.isTTSSupported && (
+            {/* Audio Interviewer Live Voice Button */}
+            {liveVoice.isTTSSupported && (
               <button
                 type="button"
-                onClick={handleToggleQuestionAudio}
+                onClick={() => {
+                  if (liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question') {
+                    liveVoice.stopAll()
+                  } else {
+                    liveVoice.triggerRepeat()
+                  }
+                }}
                 className={`px-3 py-1.5 rounded-xl border text-xs font-medium transition-all flex items-center gap-1.5 shadow-sm cursor-pointer ${
-                  speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt)
+                  liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question'
                     ? 'bg-rose-950/80 hover:bg-rose-900 border-rose-700/80 text-rose-200 animate-pulse'
                     : 'bg-zinc-800/80 hover:bg-zinc-750 border-zinc-700/70 text-zinc-300 hover:text-white'
                 }`}
-                title="Listen to Interviewer articulate this problem scenario"
+                title={
+                  liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question'
+                    ? 'Stop Interviewer Voice'
+                    : 'Repeat Question Aloud'
+                }
               >
-                <span>{speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt) ? '⏹' : '🔊'}</span>
-                <span>{speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt) ? 'Stop Audio' : 'Listen'}</span>
+                <span>{liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question' ? '⏹' : '🔊'}</span>
+                <span>{liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question' ? 'Stop Voice' : 'Repeat Question'}</span>
               </button>
             )}
 
@@ -652,56 +667,223 @@ export default function InterviewWorkspace({
         )}
       </div>
 
-      {/* Editor & Notes Workspace */}
-      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
-        {/* Workspace Toolbar */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-zinc-950/80 border-b border-zinc-800/80">
-          {/* View Toggles */}
-          <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
-            {isConversationalMode ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('oral')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                    activeTab === 'oral'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <span className={oralSpeech.isListening ? 'animate-pulse text-red-400' : ''}>🎙️</span>
-                  <span>Live Oral Response</span>
-                  {oralSpeech.isListening && (
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+      {/* 1. PRIMARY LIVE AI VOICE STAGE (Verbal-First Experience) */}
+      {!liveVoice.isStarted ? (
+        <div className="rounded-2xl border border-indigo-500/50 bg-gradient-to-r from-indigo-950/80 via-purple-950/40 to-zinc-950 p-6 sm:p-8 text-center space-y-4 shadow-2xl relative overflow-hidden">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-indigo-600/30 border border-indigo-400/50 flex items-center justify-center text-3xl shadow-lg shadow-indigo-600/30 animate-pulse">
+            🎙️
+          </div>
+          <div>
+            <h3 className="text-xl font-bold text-white tracking-tight">
+              Live AI Voice Interview Ready
+            </h3>
+            <p className="text-xs sm:text-sm text-zinc-300 max-w-xl mx-auto mt-1.5 leading-relaxed">
+              The AI interviewer will immediately speak this question aloud and automatically activate your microphone for a live conversational answer.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={liveVoice.startLiveSession}
+            className="px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-bold text-white shadow-xl shadow-indigo-600/30 transition-all flex items-center gap-2.5 mx-auto cursor-pointer text-sm"
+          >
+            <span>🔊 Start Live Voice Interview (Connect Audio)</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+          </button>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-zinc-800 bg-gradient-to-b from-zinc-950/90 via-zinc-900/60 to-zinc-950 p-6 sm:p-8 shadow-2xl space-y-6">
+          {/* Agent Voice Orb & Status Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-6 p-5 rounded-2xl bg-zinc-950/80 border border-zinc-800/80 shadow-inner">
+            <div className="flex items-center gap-4">
+              {/* Dynamic Animated Voice Orb */}
+              <div className="relative flex items-center justify-center">
+                {liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question' ? (
+                  <div className="relative w-16 h-16 rounded-full bg-indigo-600/20 border-2 border-indigo-500 flex items-center justify-center text-2xl shadow-lg shadow-indigo-600/40">
+                    <span className="animate-pulse">🤖</span>
+                    <div className="absolute inset-0 rounded-full border-2 border-indigo-400 animate-ping opacity-30" />
+                  </div>
+                ) : liveVoice.agentStatus === 'listening' ? (
+                  <div className="relative w-16 h-16 rounded-full bg-emerald-600/20 border-2 border-emerald-500 flex items-center justify-center text-2xl shadow-lg shadow-emerald-600/40">
+                    <span className="animate-pulse">🎙️</span>
+                    <div className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping opacity-40" />
+                  </div>
+                ) : (
+                  <div className="w-16 h-16 rounded-full bg-zinc-800 border-2 border-zinc-700 flex items-center justify-center text-2xl text-zinc-400">
+                    <span>⏸️</span>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2">
+                  {liveVoice.agentStatus === 'speaking_question' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-950 text-indigo-300 border border-indigo-700 text-xs font-mono font-semibold flex items-center gap-1.5 animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-indigo-400 animate-ping" />
+                      Interviewer Speaking Question Aloud...
+                    </span>
                   )}
-                </button>
+                  {liveVoice.agentStatus === 'repeating_question' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-purple-950 text-purple-300 border border-purple-700 text-xs font-mono font-semibold flex items-center gap-1.5 animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-purple-400 animate-ping" />
+                      Repeating Question Aloud...
+                    </span>
+                  )}
+                  {liveVoice.agentStatus === 'listening' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-700 text-xs font-mono font-semibold flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      Microphone Live • Listening to your answer
+                    </span>
+                  )}
+                  {liveVoice.agentStatus === 'paused' && (
+                    <span className="px-2.5 py-0.5 rounded-full bg-zinc-800 text-zinc-400 border border-zinc-700 text-xs font-mono">
+                      Microphone Paused
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-xs text-zinc-300 mt-1.5">
+                  {liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question'
+                    ? 'Listen carefully. Your microphone will automatically open as soon as the interviewer finishes speaking.'
+                    : liveVoice.agentStatus === 'listening'
+                    ? 'Speak your technical reasoning, system design, or algorithm aloud. It transcribes live below.'
+                    : 'Click resume to continue voice conversation.'}
+                </p>
+
+                {liveVoice.commandNotice && (
+                  <div className="mt-2 text-xs font-mono text-purple-300 bg-purple-950/40 border border-purple-800/60 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5">
+                    <span>✨</span>
+                    <span>{liveVoice.commandNotice}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Voice Controls */}
+            <div className="flex items-center gap-2.5 self-end sm:self-center shrink-0">
+              <button
+                type="button"
+                onClick={liveVoice.triggerRepeat}
+                className="px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-all flex items-center gap-1.5 cursor-pointer shadow-sm"
+                title="Repeat the question aloud"
+              >
+                <span>🔄</span>
+                <span>Repeat Question</span>
+              </button>
+              <button
+                type="button"
+                onClick={liveVoice.toggleListeningPause}
+                className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-all flex items-center gap-1.5 cursor-pointer shadow-sm ${
+                  liveVoice.agentStatus === 'listening'
+                    ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700'
+                    : 'bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-500'
+                }`}
+              >
+                <span>{liveVoice.agentStatus === 'listening' ? '⏸ Pause Mic' : '▶ Resume Mic'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Real-time Voice Soundwave Animation */}
+          {(liveVoice.agentStatus === 'listening' || liveVoice.agentStatus === 'speaking_question' || liveVoice.agentStatus === 'repeating_question') && (
+            <div className="flex items-center justify-center gap-1.5 py-2">
+              <div className={`w-1.5 rounded-full animate-pulse ${liveVoice.agentStatus === 'listening' ? 'bg-emerald-500 h-8' : 'bg-indigo-500 h-6'}`} />
+              <div className={`w-1.5 rounded-full animate-pulse delay-75 ${liveVoice.agentStatus === 'listening' ? 'bg-red-500 h-12' : 'bg-purple-500 h-10'}`} />
+              <div className={`w-1.5 rounded-full animate-pulse delay-150 ${liveVoice.agentStatus === 'listening' ? 'bg-indigo-500 h-5' : 'bg-indigo-500 h-4'}`} />
+              <div className={`w-1.5 rounded-full animate-pulse delay-100 ${liveVoice.agentStatus === 'listening' ? 'bg-emerald-500 h-10' : 'bg-purple-500 h-8'}`} />
+              <div className={`w-1.5 rounded-full animate-pulse delay-200 ${liveVoice.agentStatus === 'listening' ? 'bg-indigo-500 h-7' : 'bg-indigo-500 h-5'}`} />
+              <span className="text-xs font-mono text-zinc-400 ml-3">
+                {liveVoice.agentStatus === 'listening' ? 'Listening to your voice live...' : 'Agent speaking aloud...'}
+              </span>
+            </div>
+          )}
+
+          {/* Conversational Voice Commands Hint Banner */}
+          <div className="p-3.5 rounded-xl bg-indigo-950/20 border border-indigo-900/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-indigo-300">
+              <span>💡</span>
+              <span className="font-semibold text-white">Live Conversational Voice Commands:</span>
+              <span className="text-zinc-300">Say <strong className="text-indigo-200 font-mono">&quot;Can you repeat the question?&quot;</strong> anytime to hear it repeated aloud.</span>
+            </div>
+            <div className="flex items-center gap-2 text-zinc-400 text-[11px] font-mono">
+              <span>Say: &quot;Clear my answer&quot; to reset</span>
+            </div>
+          </div>
+
+          {/* Quick Answer Structure Starters */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] text-zinc-400">
+              <span>Quick Structure Starters (click to insert):</span>
+              {oralAnswer && (
                 <button
                   type="button"
-                  onClick={() => setActiveTab('notes')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                    activeTab === 'notes'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
+                  onClick={() => setOralAnswer('')}
+                  className="text-zinc-500 hover:text-zinc-300 underline cursor-pointer"
                 >
-                  <span>📝</span>
-                  <span>Architecture Notes</span>
+                  Clear Verbal Answer
                 </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                '1. High-Level Architectural Flow:',
+                '2. Technology Choices & Trade-offs:',
+                '3. Scalability, Caching & Bottlenecks:',
+                '4. Failure Recovery & Edge Cases:',
+              ].map((starter) => (
                 <button
+                  key={starter}
                   type="button"
-                  onClick={() => setActiveTab('code')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                    activeTab === 'code'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
+                  onClick={() =>
+                    setOralAnswer((prev) => (prev ? `${prev}\n\n${starter}\n` : `${starter}\n`))
+                  }
+                  className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-indigo-300 hover:text-white transition-all cursor-pointer"
                 >
-                  <span>{`{ }`}</span>
-                  <span>Scratchpad (Optional)</span>
+                  + {starter.slice(3)}
                 </button>
-              </>
-            ) : (
-              <>
+              ))}
+            </div>
+          </div>
+
+          {/* Live Transcribed Spoken Answer Textarea */}
+          <div className="relative">
+            <textarea
+              rows={9}
+              value={oralAnswer}
+              onChange={(e) => setOralAnswer(e.target.value)}
+              placeholder="Your transcribed verbal answer will stream here live as you speak. You can also edit, refine, or add notes directly..."
+              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl p-4 text-white text-xs sm:text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-zinc-600 resize-y leading-relaxed"
+            />
+            <div className="absolute bottom-3 right-3 text-[10px] font-mono text-zinc-500 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800">
+              {oralAnswer.trim() ? `${oralAnswer.trim().split(/\s+/).length} words` : '0 words'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. SECONDARY KEYBOARD / CODE TYPING ACCORDION (Secondary Option) */}
+      <div className="space-y-3">
+        <button
+          type="button"
+          onClick={() => setShowSecondaryTyping(!showSecondaryTyping)}
+          className="w-full py-3 px-4 rounded-xl border border-zinc-800 bg-zinc-950/70 hover:bg-zinc-900/80 text-xs text-zinc-400 hover:text-zinc-200 transition-all flex items-center justify-between cursor-pointer font-mono shadow-sm"
+        >
+          <span className="flex items-center gap-2">
+            <span>⌨️</span>
+            <span className="font-semibold text-zinc-300">
+              {showSecondaryTyping
+                ? 'Hide Secondary Keyboard & Code Editor'
+                : 'Prefer to type or write code? Switch to Keyboard Input (Secondary Option)'}
+            </span>
+          </span>
+          <span className="text-[11px] text-zinc-500">{showSecondaryTyping ? '▲ Collapse' : '▼ Expand'}</span>
+        </button>
+
+        {showSecondaryTyping && (
+          <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+            {/* Workspace Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-zinc-950/80 border-b border-zinc-800/80">
+              {/* View Toggles */}
+              <div className="flex items-center gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
                 <button
                   type="button"
                   onClick={() => setActiveTab('code')}
@@ -724,23 +906,9 @@ export default function InterviewWorkspace({
                   }`}
                 >
                   <span>📝</span>
-                  <span>Architecture & Trade-offs</span>
+                  <span>Architecture Notes</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('oral')}
-                  className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all flex items-center gap-1.5 cursor-pointer ${
-                    activeTab === 'oral'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  <span>🎙️</span>
-                  <span>Oral Explanation</span>
-                </button>
-              </>
-            )}
-          </div>
+              </div>
 
           {/* Controls (Active in Code Mode) */}
           {activeTab === 'code' && (
@@ -1001,170 +1169,17 @@ export default function InterviewWorkspace({
           </div>
         )}
 
-        {/* Tab 3: Live Oral Stage (Non-Coding Conversational Interview) */}
-        {activeTab === 'oral' && (
-          <div className="p-5 sm:p-6 space-y-6 bg-gradient-to-b from-zinc-950/80 via-zinc-900/40 to-zinc-950/90">
-            {/* Top Oral Guidance Banner */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-indigo-950/30 border border-indigo-800/50">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">🎙️</span>
-                  <h3 className="text-sm font-semibold text-white">Live Oral Examination Mode</h3>
-                  <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800">
-                    No Code Required
-                  </span>
-                </div>
-                <p className="text-xs text-zinc-300 leading-relaxed">
-                  Speak naturally about your approach, system boundaries, and architectural trade-offs. The AI interviewer analyzes your spoken audio and real-time transcript.
-                </p>
-              </div>
-
-              {/* Quick AI Audio Button */}
-              {speechPlayer.isTTSSupported && (
-                <button
-                  type="button"
-                  onClick={handleToggleQuestionAudio}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-medium border transition-all flex items-center gap-2 shrink-0 cursor-pointer shadow-sm ${
-                    speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt)
-                      ? 'bg-rose-950 border-rose-600 text-rose-200 animate-pulse'
-                      : 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-200'
-                  }`}
-                >
-                  <span>{speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt) ? '⏹' : '🔊'}</span>
-                  <span>{speechPlayer.isSpeaking && speechPlayer.currentSpeakingText?.includes(prompt) ? 'Stop Question Voice' : 'Hear Interviewer Voice'}</span>
-                </button>
-              )}
-            </div>
-
-            {/* Microphone Recording Action Card */}
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-950/90 p-5 sm:p-6 shadow-inner space-y-5">
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-lg ${
-                      oralSpeech.isListening
-                        ? 'bg-red-600 text-white animate-pulse shadow-red-600/40 ring-4 ring-red-500/20'
-                        : 'bg-indigo-600/20 border border-indigo-500/40 text-indigo-400'
-                    }`}
-                  >
-                    <span className="text-2xl">{oralSpeech.isListening ? '🎙️' : '🎤'}</span>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                      <span>Candidate Audio Input</span>
-                      {oralSpeech.isListening && (
-                        <span className="flex items-center gap-1.5 text-xs font-mono text-red-400">
-                          <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-                          RECORDING LIVE
-                        </span>
-                      )}
-                    </h4>
-                    <p className="text-xs text-zinc-400">
-                      {oralSpeech.isListening
-                        ? 'Dictating in real-time... Speak your answer into your microphone.'
-                        : oralSpeech.isSTTSupported
-                        ? 'Click the button to start voice dictation, or type directly into the box.'
-                        : 'Web Speech STT is not supported in this browser. Please type your answer below.'}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Primary Mic Toggle */}
-                {oralSpeech.isSTTSupported && (
-                  <button
-                    type="button"
-                    onClick={oralSpeech.toggleListening}
-                    className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 shadow-lg cursor-pointer ${
-                      oralSpeech.isListening
-                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-red-600/30 ring-2 ring-red-400'
-                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30'
-                    }`}
-                  >
-                    <span>{oralSpeech.isListening ? '⏹ Stop Dictation' : '🎙️ Start Speaking'}</span>
-                  </button>
-                )}
-              </div>
-
-              {oralSpeech.recognitionError && (
-                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-amber-200 text-xs">
-                  {oralSpeech.recognitionError}
-                </div>
-              )}
-
-              {/* Soundwave Animation while recording */}
-              {oralSpeech.isListening && (
-                <div className="flex items-center justify-center gap-1.5 py-2">
-                  <div className="w-1 bg-red-500 h-6 animate-pulse rounded-full" />
-                  <div className="w-1 bg-indigo-500 h-10 animate-pulse delay-75 rounded-full" />
-                  <div className="w-1 bg-emerald-500 h-4 animate-pulse delay-150 rounded-full" />
-                  <div className="w-1 bg-indigo-500 h-8 animate-pulse delay-100 rounded-full" />
-                  <div className="w-1 bg-red-500 h-5 animate-pulse delay-200 rounded-full" />
-                  <span className="text-xs font-mono text-zinc-400 ml-3">Listening to your voice in real-time...</span>
-                </div>
-              )}
-
-              {/* Structuring Shortcuts */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                  <span>Quick Structure Starters (click to insert into your verbal response):</span>
-                  {oralAnswer && (
-                    <button
-                      type="button"
-                      onClick={() => setOralAnswer('')}
-                      className="text-zinc-500 hover:text-zinc-300 underline cursor-pointer"
-                    >
-                      Clear Answer
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    '1. Architectural Overview & System Flow:',
-                    '2. Key Technology Choices & Trade-offs:',
-                    '3. Scalability, Caching & Bottlenecks:',
-                    '4. Failure Recovery & Edge Cases:',
-                  ].map((starter) => (
-                    <button
-                      key={starter}
-                      type="button"
-                      onClick={() =>
-                        setOralAnswer((prev) =>
-                          prev ? `${prev}\n\n${starter}\n` : `${starter}\n`
-                        )
-                      }
-                      className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-[11px] text-indigo-300 hover:text-white transition-all cursor-pointer"
-                    >
-                      + {starter.slice(3)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Live Spoken Transcript Textarea */}
-              <div className="relative">
-                <textarea
-                  rows={10}
-                  value={oralAnswer}
-                  onChange={(e) => setOralAnswer(e.target.value)}
-                  placeholder="Your transcribed spoken answer will appear here in real-time as you speak. You can also edit, refine, or type directly..."
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl p-4 text-white text-xs sm:text-sm font-sans focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-zinc-600 resize-y leading-relaxed"
-                />
-                <div className="absolute bottom-3 right-3 text-[10px] font-mono text-zinc-500 bg-zinc-900/80 px-2 py-0.5 rounded border border-zinc-800">
-                  {oralAnswer.trim() ? `${oralAnswer.trim().split(/\s+/).length} words` : '0 words'}
-                </div>
-              </div>
-            </div>
           </div>
         )}
+      </div>
 
-        {/* Action / Submit Footer */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 bg-zinc-950/90 border-t border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+      {/* 3. Action / Submit Footer */}
+      <div className="bg-zinc-900/90 border border-zinc-800 rounded-2xl overflow-hidden shadow-2xl">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 bg-zinc-950/90 flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="text-xs text-zinc-400 flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-emerald-400" />
             <span>
-              {isConversationalMode
-                ? 'Your oral response and architectural reasoning are evaluated directly by AI.'
-                : 'Both code and architectural notes are evaluated together by local Ollama.'}
+              Your verbal answer is evaluated directly by AI. Speak naturally into your microphone.
             </span>
           </div>
 
@@ -1179,9 +1194,9 @@ export default function InterviewWorkspace({
                 <span>Evaluating Verbal Response & Calibrating Follow-up...</span>
               </>
             ) : questionNumber >= totalQuestions ? (
-              isConversationalMode ? 'Submit Verbal Answer & Finish Interview' : 'Submit & Finish Interview'
+              'Submit Verbal Answer & Finish Interview'
             ) : (
-              isConversationalMode ? 'Submit Verbal Answer & Next Question →' : 'Submit & Next Question →'
+              'Submit Verbal Answer & Next Question →'
             )}
           </button>
         </form>

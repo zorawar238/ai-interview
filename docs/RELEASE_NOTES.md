@@ -31,10 +31,11 @@ Built with **Next.js 16**, **React 19**, **Supabase**, and local **Ollama** infe
 - Live AI chat drawer streams responses in real time via chunked HTTP stream.
 - Built-in interviewer guardrails: strictly refuses to give away solution code, prompting candidates to think through algorithms, edge cases, and Big-O efficiency.
 
-### 4. Multimodal Zero-Cloud Voice Engine
-- In-browser speech-to-text allows candidates to dictate architectural thoughts hands-free.
-- In-browser speech synthesis articulates interview questions aloud.
-- React 19 `useSyncExternalStore` architecture eliminates SSR hydration mismatch.
+### 4. Verbal-First Hands-Free Voice Engine & Live Agent Loop
+- **Primary Live Voice Stage:** Interactive AI Voice Orb with active speaker status (`[Speaking Question]` vs `[Listening to You]`), real-time frequency waveforms, and live transcribed spoken answer streaming.
+- **Hands-Free Conversational Handoff:** The AI agent automatically articulates the question aloud on entry; the moment it finishes speaking, the microphone automatically opens for candidate response without clicking.
+- **Real-Time Voice Commands:** Detects intent live (e.g. *"Can you repeat the question?"*, *"Say that again"*, *"Clear my answer"*) and repeats the question verbally on command.
+- **Secondary Keyboard Fallback:** Code IDE and scratchpad typing are demoted to a secondary collapsible drawer, prioritizing voice as the primary medium.
 
 ### 5. Analytics Dashboard & Portable Export
 - Mathematical SVG score trendlines and topic mastery matrices computed with zero heavy charting dependencies.
@@ -42,13 +43,13 @@ Built with **Next.js 16**, **React 19**, **Supabase**, and local **Ollama** infe
 
 ### 6. Automated Regression Testing Suite
 - Integrated **Vitest** test runner with native ESM and `@/*` path resolution.
-- **31 automated tests** covering adaptive mathematical thresholds, sandbox payload bounds, and Zod runtime schema contracts.
+- **35 automated tests** covering voice commands intent parsing, adaptive mathematical thresholds, sandbox payload bounds, and Zod runtime schema contracts.
 
 ---
 
 ## Verification & Metrics
 
-- **Unit & Contract Tests:** `31/31 passed (100% in 477ms)`
+- **Unit & Contract Tests:** `35/35 passed (100% in 317ms)`
 - **Turbopack Build:** `Next.js 16.4.3 production build successful with 0 errors`
 - **Cost:** `₹0 / $0 recurring API expense` via local Ollama inference
 - **Security:** Strict Supabase Row-Level Security (RLS) policies on all database tables
