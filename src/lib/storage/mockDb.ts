@@ -38,6 +38,21 @@ const initialInterviews: Interview[] = [
     completed_at: new Date(Date.now() - 86400000 * 5 + 1800000).toISOString(),
     created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
   },
+  {
+    id: '33333333-3333-3333-3333-333333333333',
+    user_id: DEMO_USER_ID,
+    role: 'Principal Cloud Architect',
+    experience_level: 'lead',
+    difficulty: 'hard',
+    topics: ['System Design', 'Distributed Systems'],
+    duration_minutes: 30,
+    status: 'in_progress',
+    interview_mode: 'adaptive',
+    interview_format: 'conversational',
+    started_at: new Date().toISOString(),
+    completed_at: null,
+    created_at: new Date().toISOString(),
+  },
 ]
 
 const initialQuestions: Question[] = [
@@ -110,6 +125,25 @@ const initialQuestions: Question[] = [
     position: 2,
     rubric: JSON.stringify({ rubric: 'Assess .pipe(), drain events, pause/resume mechanics, and memory buffer limits.', hints: [] }),
     created_at: new Date(Date.now() - 86400000 * 5).toISOString(),
+  },
+  {
+    id: 'q-301',
+    interview_id: '33333333-3333-3333-3333-333333333333',
+    type: 'technical',
+    topic: 'System Design',
+    prompt: 'You are designing a globally distributed real-time collaborative workspace supporting 5 million active users with sub-50ms peer synchronization. Detail your replication topology, conflict resolution model (CRDTs vs OT), and how you prevent partition splits during trans-oceanic network degrades.',
+    difficulty: 'hard',
+    position: 1,
+    rubric: JSON.stringify({
+      rubric: 'Assess state-based vs operation-based CRDTs, causal consistency, vector clocks, multi-region Raft/Paxos clusters, and edge CDN termination.',
+      hints: [
+        'Consider State-based vs Operation-based CRDTs and their bandwidth overhead over WebSockets.',
+        'Evaluate how vector clocks detect concurrent edits without central coordination.'
+      ],
+      interviewMode: 'adaptive',
+      targetQuestions: 3,
+    }),
+    created_at: new Date().toISOString(),
   },
 ]
 
